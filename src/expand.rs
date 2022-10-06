@@ -8,7 +8,7 @@ use cargo::{
     ops::{self, CompileOptions},
     util::{command_prelude::CompileMode, Config},
 };
-use std::{collections::HashMap, ops::Not, path::Path, process::Command};
+use std::{collections::BTreeSet, fmt::Debug, ops::Not, path::Path, process::Command};
 use syn::{visit_mut::VisitMut, File, Item, ItemMod, Visibility};
 
 fn cargo_expand(cargo_dir: &TargetSourcePath) -> Result<syn::File> {
@@ -39,9 +39,38 @@ fn cargo_expand(cargo_dir: &TargetSourcePath) -> Result<syn::File> {
 }
 
 struct Crate {
-    file: syn::File,
     name: String,
+    file: syn::File,
     deps: Vec<String>,
+}
+
+impl Debug for Crate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Crate")
+            .field("name", &self.name)
+            .field("deps", &self.deps)
+            .finish()
+    }
+}
+
+impl PartialEq for Crate {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+
+impl Eq for Crate {}
+
+impl PartialOrd for Crate {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.name.partial_cmp(&other.name)
+    }
+}
+
+impl Ord for Crate {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.name.cmp(&other.name)
+    }
 }
 
 struct DepExpander<'ws, 'cfg> {
@@ -56,12 +85,42 @@ impl<'ws, 'cfg> DepExpander<'ws, 'cfg> {
             .context("unit source path not found")
     }
 
-    fn crates(&self) -> Vec<Crate> {
-        todo!()
+    fn crates(&self, unit: &Unit, set: &mut BTreeSet<Crate>) -> Result<()> {
+        let ast = cargo_expand(unit.target.src_path()).context("expanding unit")?;
+
+        let deps = self
+            .bcx
+            .unit_graph
+            .get(unit)
+            .context("dependencies not found for crate")?;
+
+        let dep_names = deps
+            .iter()
+            .map(|dep| dep.unit.target.crate_name())
+            .collect();
+
+        let krate = Crate {
+            file: ast,
+            name: unit.target.crate_name(),
+            deps: dep_names,
+        };
+
+        set.insert(krate);
+
+        for dep in deps {
+            self.crates(&dep.unit, set)?;
+        }
+
+        Ok(())
     }
 
     fn expand(&self) -> Result<File> {
         let unit = self.bcx.roots.get(0).context("root unit not found")?;
+
+        let mut crates = BTreeSet::new();
+        self.crates(unit, &mut crates).context("get crate list")?;
+        println!("{crates:?}");
+
         self.expand_recursively(unit)
             .context(format!("expanding {} crate", unit.target.crate_name()))
     }
