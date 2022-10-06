@@ -10,7 +10,6 @@ use anyhow::{Context, Result};
 pub fn minimize(cargo_dir: &Path) -> Result<()> {
     let file = expand::expand(cargo_dir).context("during expansion")?;
 
-
     let file = prettyplease::unparse(&file);
 
     println!("// EXPANDED-START\n\n{file}\n\n// EXPANDED-END");
