@@ -8,7 +8,8 @@ use cargo::{
     ops::{self, CompileOptions},
     util::{command_prelude::CompileMode, Config},
 };
-use std::{ops::Not, path::Path, process::Command};
+use std::{collections::HashMap, ops::Not, path::Path, process::Command};
+use syn::{visit_mut::VisitMut, File, Item, ItemMod, Visibility};
 
 fn cargo_expand(cargo_dir: &TargetSourcePath) -> Result<syn::File> {
     let cargo_dir = cargo_dir
@@ -37,6 +38,12 @@ fn cargo_expand(cargo_dir: &TargetSourcePath) -> Result<syn::File> {
     Ok(root)
 }
 
+struct Crate {
+    file: syn::File,
+    name: String,
+    deps: Vec<String>,
+}
+
 struct DepExpander<'ws, 'cfg> {
     bcx: BuildContext<'ws, 'cfg>,
 }
@@ -49,13 +56,17 @@ impl<'ws, 'cfg> DepExpander<'ws, 'cfg> {
             .context("unit source path not found")
     }
 
-    fn expand(&self) -> Result<syn::File> {
+    fn crates(&self) -> Vec<Crate> {
+        todo!()
+    }
+
+    fn expand(&self) -> Result<File> {
         let unit = self.bcx.roots.get(0).context("root unit not found")?;
         self.expand_recursively(unit)
             .context(format!("expanding {} crate", unit.target.crate_name()))
     }
 
-    fn expand_recursively(&self, unit: &Unit) -> Result<syn::File> {
+    fn expand_recursively(&self, unit: &Unit) -> Result<File> {
         let mut ast = cargo_expand(unit.target.src_path()).context("expanding unit")?;
 
         let deps = self
@@ -73,7 +84,7 @@ impl<'ws, 'cfg> DepExpander<'ws, 'cfg> {
 
             let name = proc_macro2::Ident::new(&crate_name, proc_macro2::Span::call_site());
 
-            let module = syn::ItemMod {
+            let mut module = ItemMod {
                 attrs: file.attrs,
                 vis: syn::Visibility::Inherited,
                 mod_token: Default::default(),
@@ -81,6 +92,8 @@ impl<'ws, 'cfg> DepExpander<'ws, 'cfg> {
                 content: Some((Default::default(), file.items)),
                 semi: None,
             };
+
+            clean_dep_mod(&mut module);
 
             ast.items.push(syn::Item::Mod(module));
         }
@@ -90,7 +103,7 @@ impl<'ws, 'cfg> DepExpander<'ws, 'cfg> {
 }
 
 /// Expands the crate in `cargo_dir` into a single file without dependencies
-pub fn expand(cargo_dir: &Path) -> Result<syn::File> {
+pub fn expand(cargo_dir: &Path) -> Result<File> {
     let cargo_dir = cargo_dir.canonicalize().context("could not find path")?;
     let manifest_path = cargo_dir.join("Cargo.toml");
 
@@ -102,7 +115,41 @@ pub fn expand(cargo_dir: &Path) -> Result<syn::File> {
 
     let expander = DepExpander { bcx };
 
-    let root = expander.expand()?;
+    let mut root = expander.expand()?;
+
+    clean_final_code(&mut root);
 
     Ok(root)
+}
+
+fn clean_dep_mod(module: &mut ItemMod) {
+    module
+        .content
+        .as_mut()
+        .unwrap()
+        .1
+        .retain(|item| !matches!(item, Item::ExternCrate(_)));
+
+    module.attrs.retain(
+        |attr| match attr.path.segments[0].ident.to_string().as_ref() {
+            "no_std" | "feature" => false,
+            _ => true,
+        },
+    )
+}
+
+fn clean_final_code(file: &mut File) {
+    MakePubCrateVisitor.visit_file_mut(file)
+}
+
+struct MakePubCrateVisitor;
+
+impl VisitMut for MakePubCrateVisitor {
+    fn visit_visibility_mut(&mut self, vis: &mut Visibility) {
+        if let Visibility::Public(_) = vis {
+            let pub_crate = syn::parse2(quote::quote! { pub(crate) }).unwrap();
+
+            *vis = pub_crate;
+        }
+    }
 }
