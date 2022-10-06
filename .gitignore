@@ -1,2 +1,5 @@
 target
-expanded.rs
+/expanded.rs
+/expanded
+/invalid.rs
+/invalid

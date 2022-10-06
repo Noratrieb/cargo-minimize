@@ -9,7 +9,7 @@ use cargo::{
     util::{command_prelude::CompileMode, Config},
 };
 use std::{collections::BTreeSet, fmt::Debug, ops::Not, path::Path, process::Command};
-use syn::{visit_mut::VisitMut, File, Item, ItemMod, Visibility};
+use syn::{visit_mut::VisitMut, File, Item, ItemExternCrate, ItemMod, ItemUse, Visibility};
 
 fn cargo_expand(cargo_dir: &TargetSourcePath) -> Result<syn::File> {
     let cargo_dir = cargo_dir
@@ -22,6 +22,12 @@ fn cargo_expand(cargo_dir: &TargetSourcePath) -> Result<syn::File> {
 
     cmd.current_dir(cargo_dir).arg("expand");
 
+    if let Some(lib) = std::env::args().nth(2) {
+        if lib == "lib" {
+            cmd.arg("--lib");
+        }
+    }
+
     let output = cmd.output().context(format!(
         "spawning cargo with target path {}",
         cargo_dir.display()
@@ -33,14 +39,25 @@ fn cargo_expand(cargo_dir: &TargetSourcePath) -> Result<syn::File> {
 
     let src = String::from_utf8(output.stdout).context("stdout utf8")?;
 
-    let root = syn::parse_str(&src).context("parsing crate")?;
+    let root = match syn::parse_str(&src) {
+        Ok(root) => root,
+        Err(err) => {
+            let name = "invalid.rs";
+
+            std::fs::write(name, src).context("write debug file")?;
+            Err(err).context(format!(
+                "failed to parse, debug file with the contents at `{name}`"
+            ))?;
+            unreachable!()
+        }
+    };
 
     Ok(root)
 }
 
 struct Crate {
     name: String,
-    file: syn::File,
+    ast: syn::File,
     deps: Vec<String>,
 }
 
@@ -85,8 +102,19 @@ impl<'ws, 'cfg> DepExpander<'ws, 'cfg> {
             .context("unit source path not found")
     }
 
-    fn crates(&self, unit: &Unit, set: &mut BTreeSet<Crate>) -> Result<()> {
-        let ast = cargo_expand(unit.target.src_path()).context("expanding unit")?;
+    fn dep_crates(&self, unit: &Unit, set: &mut BTreeSet<Crate>) -> Result<()> {
+        let krate = self.crates(unit, set)?;
+        set.insert(krate);
+
+        Ok(())
+    }
+
+    /// Adds all dependencies to `set` and returns itself
+    fn crates(&self, unit: &Unit, set: &mut BTreeSet<Crate>) -> Result<Crate> {
+        let name = unit.target.crate_name();
+
+        let ast =
+            cargo_expand(unit.target.src_path()).context(format!("expanding crate `{}`", name))?;
 
         let deps = self
             .bcx
@@ -100,64 +128,48 @@ impl<'ws, 'cfg> DepExpander<'ws, 'cfg> {
             .collect();
 
         let krate = Crate {
-            file: ast,
-            name: unit.target.crate_name(),
+            ast,
+            name,
             deps: dep_names,
         };
 
-        set.insert(krate);
-
         for dep in deps {
-            self.crates(&dep.unit, set)?;
+            self.dep_crates(&dep.unit, set)?;
         }
 
-        Ok(())
+        Ok(krate)
     }
 
     fn expand(&self) -> Result<File> {
         let unit = self.bcx.roots.get(0).context("root unit not found")?;
 
         let mut crates = BTreeSet::new();
-        self.crates(unit, &mut crates).context("get crate list")?;
-        println!("{crates:?}");
+        let mut root = self.crates(unit, &mut crates).context("get crate list")?;
 
-        self.expand_recursively(unit)
-            .context(format!("expanding {} crate", unit.target.crate_name()))
-    }
-
-    fn expand_recursively(&self, unit: &Unit) -> Result<File> {
-        let mut ast = cargo_expand(unit.target.src_path()).context("expanding unit")?;
-
-        let deps = self
-            .bcx
-            .unit_graph
-            .get(unit)
-            .context("dependencies not found for crate")?;
-
-        for dep in deps {
-            let crate_name = dep.unit.target.crate_name();
-
-            let file = self
-                .expand_recursively(&dep.unit)
-                .context(format!("expanding {crate_name} crate"))?;
-
-            let name = proc_macro2::Ident::new(&crate_name, proc_macro2::Span::call_site());
-
-            let mut module = ItemMod {
-                attrs: file.attrs,
-                vis: syn::Visibility::Inherited,
-                mod_token: Default::default(),
-                ident: name,
-                content: Some((Default::default(), file.items)),
-                semi: None,
-            };
-
-            clean_dep_mod(&mut module);
-
-            ast.items.push(syn::Item::Mod(module));
+        for krate in crates {
+            self.expand_crate(krate, &mut root.ast);
         }
 
-        Ok(ast)
+        Ok(root.ast)
+    }
+
+    fn expand_crate(&self, krate: Crate, root: &mut syn::File) {
+        let crate_name = krate.name;
+        let file = krate.ast;
+        let name = proc_macro2::Ident::new(&crate_name, proc_macro2::Span::call_site());
+
+        let mut module = ItemMod {
+            attrs: file.attrs,
+            vis: syn::Visibility::Inherited,
+            mod_token: Default::default(),
+            ident: name,
+            content: Some((Default::default(), file.items)),
+            semi: None,
+        };
+
+        clean_dep_mod(&mut module);
+
+        root.items.push(syn::Item::Mod(module));
     }
 }
 
@@ -182,23 +194,23 @@ pub fn expand(cargo_dir: &Path) -> Result<File> {
 }
 
 fn clean_dep_mod(module: &mut ItemMod) {
-    module
-        .content
-        .as_mut()
-        .unwrap()
-        .1
-        .retain(|item| !matches!(item, Item::ExternCrate(_)));
+    let items = &mut module.content.as_mut().unwrap().1;
+
+    items.retain(|item| !matches!(item, Item::ExternCrate(_)));
+    clean_items_general(items);
 
     module.attrs.retain(
         |attr| match attr.path.segments[0].ident.to_string().as_ref() {
             "no_std" | "feature" => false,
             _ => true,
         },
-    )
+    );
 }
 
 fn clean_final_code(file: &mut File) {
-    MakePubCrateVisitor.visit_file_mut(file)
+    clean_items_general(&mut file.items);
+
+    MakePubCrateVisitor.visit_file_mut(file);
 }
 
 struct MakePubCrateVisitor;
@@ -211,4 +223,15 @@ impl VisitMut for MakePubCrateVisitor {
             *vis = pub_crate;
         }
     }
+}
+
+fn clean_items_general(items: &mut Vec<Item>) {
+    items.retain(|item| match item {
+        Item::ExternCrate(ItemExternCrate { ident, .. }) if ident.to_string() == "std" => false,
+        Item::Use(ItemUse { attrs, .. }) => attrs
+            .get(0)
+            .map(|attr| attr.path.segments[0].ident.to_string() != "prelude_import")
+            .unwrap_or(true),
+        _ => true,
+    })
 }
