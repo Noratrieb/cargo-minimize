@@ -1,0 +1,16 @@
+[workspace]
+exclude = ["test-cases/*"]
+
+[package]
+name = "cargo-minimize"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.65"
+cargo = "0.65.0"
+prettyplease = "0.1.19"
+proc-macro2 = "1.0.46"
+syn = { version = "1.0.101", features = ["full"] }
