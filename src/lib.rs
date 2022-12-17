@@ -8,11 +8,11 @@ mod expand;
 mod privatize;
 mod processor;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 use processor::Minimizer;
 
-use crate::{everybody_loops::EverybodyLoops, processor::Processor};
+use crate::{everybody_loops::EverybodyLoops, processor::Processor, privatize::Privatize};
 
 #[derive(clap::Parser)]
 pub struct Options {
@@ -20,6 +20,8 @@ pub struct Options {
     verify_error_path: Option<PathBuf>,
     #[arg(long)]
     cargo: bool,
+    #[arg(long)]
+    no_verify: bool,
     path: PathBuf,
 }
 
@@ -28,14 +30,18 @@ pub fn minimize() -> Result<()> {
 
     let build = build::Build::new(&options);
 
-    let mut minimizer = Minimizer::new_glob_dir(&options.path, build);
+    let mut minimizer = Minimizer::new_glob_dir(&options.path, build, &options);
 
     println!("{minimizer:?}");
 
+    minimizer.delete_dead_code().context("deleting dead code")?;
+
     minimizer.run_passes([
-        //Box::new(Privarize::default()) as Box<dyn Processor>,
+        Box::new(Privatize::default()) as Box<dyn Processor>,
         Box::new(EverybodyLoops::default()) as Box<dyn Processor>,
     ])?;
+
+    minimizer.delete_dead_code().context("deleting dead code")?;
 
     /*
     let file = expand::expand(&dir).context("during expansion")?;

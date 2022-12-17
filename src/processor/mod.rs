@@ -1,11 +1,13 @@
-use std::{
-    ffi::OsStr,
-    path::{Path, PathBuf},
-};
+mod files;
+mod reaper;
+
+use std::{ffi::OsStr, path::Path};
 
 use anyhow::{ensure, Context, Result};
 
-use crate::build::Build;
+use crate::{build::Build, processor::files::Changes, Options};
+
+use self::files::SourceFile;
 
 pub trait Processor {
     fn process_file(&mut self, krate: &mut syn::File, checker: &mut ProcessChecker) -> bool;
@@ -15,12 +17,13 @@ pub trait Processor {
 
 #[derive(Debug)]
 pub struct Minimizer {
-    files: Vec<PathBuf>,
+    files: Vec<SourceFile>,
     build: Build,
+    no_verify: bool,
 }
 
 impl Minimizer {
-    pub fn new_glob_dir(path: &Path, build: Build) -> Self {
+    pub fn new_glob_dir(path: &Path, build: Build, options: &Options) -> Self {
         let walk = walkdir::WalkDir::new(path);
 
         let files = walk
@@ -33,10 +36,16 @@ impl Minimizer {
                 }
             })
             .filter(|entry| entry.path().extension() == Some(OsStr::new("rs")))
-            .map(|entry| entry.into_path())
+            .map(|entry| SourceFile {
+                path: entry.into_path(),
+            })
             .collect();
 
-        Self { files, build }
+        Self {
+            files,
+            build,
+            no_verify: options.no_verify,
+        }
     }
 
     pub fn run_passes<'a>(
@@ -45,23 +54,24 @@ impl Minimizer {
     ) -> Result<()> {
         let inital_build = self.build.build()?;
         println!("Initial build: {}", inital_build);
-        ensure!(
-            inital_build.reproduces_issue,
-            "Initial build must reproduce issue"
-        );
+        if !self.no_verify {
+            ensure!(
+                inital_build.reproduces_issue(),
+                "Initial build must reproduce issue"
+            );
+        }
 
         for mut pass in passes {
             'pass: loop {
                 println!("Starting a round of {}", pass.name());
-                let mut any_change = false;
+                let mut changes = Changes::default();
 
                 for file in &self.files {
-                    let file_display = file.display();
+                    let file_display = file.path.display();
 
-                    let before_string = std::fs::read_to_string(file)
-                        .with_context(|| format!("opening file {file_display}"))?;
+                    let mut change = file.try_change(&mut changes)?;
 
-                    let mut krate = syn::parse_file(&before_string)
+                    let mut krate = syn::parse_file(change.before_content())
                         .with_context(|| format!("parsing file {file_display}"))?;
 
                     let has_made_change = pass.process_file(&mut krate, &mut ProcessChecker {});
@@ -69,23 +79,23 @@ impl Minimizer {
                     if has_made_change {
                         let result = prettyplease::unparse(&krate);
 
-                        std::fs::write(file, &result)?;
+                        change.write(&result)?;
 
                         let after = self.build.build()?;
 
                         println!("{file_display}: After {}: {after}", pass.name());
 
-                        if after.reproduces_issue {
-                            any_change = true;
+                        if after.reproduces_issue() {
+                            change.commit();
                         } else {
-                            std::fs::write(file, before_string)?;
+                            change.rollback()?;
                         }
                     } else {
                         println!("{file_display}: After {}: no change", pass.name());
                     }
                 }
 
-                if !any_change {
+                if !changes.had_changes() {
                     println!("Finished {}", pass.name());
                     break 'pass;
                 }

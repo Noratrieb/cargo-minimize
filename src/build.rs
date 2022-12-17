@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
-use std::{fmt::Display, path::PathBuf};
+use rustfix::diagnostics::Diagnostic;
+use std::{collections::HashSet, fmt::Display, path::PathBuf};
 
 use crate::Options;
 
@@ -7,6 +8,7 @@ use crate::Options;
 pub struct Build {
     mode: BuildMode,
     input_path: PathBuf,
+    no_verify: bool,
 }
 
 #[derive(Debug)]
@@ -28,6 +30,7 @@ impl Build {
         Self {
             mode,
             input_path: options.path.clone(),
+            no_verify: options.no_verify,
         }
     }
 
@@ -61,19 +64,58 @@ impl Build {
             }
         };
 
-        Ok(BuildResult { reproduces_issue })
+        Ok(BuildResult {
+            reproduces_issue,
+            no_verify: self.no_verify,
+        })
+    }
+
+    pub fn get_suggestions(&self) -> Result<(Vec<Diagnostic>, Vec<rustfix::Suggestion>)> {
+        match self.mode {
+            BuildMode::Cargo => {
+                todo!();
+            }
+            BuildMode::Script(_) => todo!(),
+            BuildMode::Rustc => {
+                let mut cmd = std::process::Command::new("rustc");
+                cmd.args(["--edition", "2018", "--error-format=json"]);
+                cmd.arg(&self.input_path);
+
+                let output = cmd.output()?.stderr;
+                let output = String::from_utf8(output)?;
+
+                let diags = serde_json::Deserializer::from_str(&output).into_iter::<Diagnostic>().collect::<Result<_, _>>()?;
+
+                let suggestions = rustfix::get_suggestions_from_json(
+                    &output,
+                    &HashSet::new(),
+                    rustfix::Filter::Everything,
+                )
+                .context("reading output as rustfix suggestions")?;
+
+                Ok((diags, suggestions))
+            }
+        }
     }
 }
 
 pub struct BuildResult {
-    pub reproduces_issue: bool,
+    reproduces_issue: bool,
+    no_verify: bool,
+}
+
+impl BuildResult {
+    pub fn reproduces_issue(&self) -> bool {
+        self.reproduces_issue || self.no_verify
+    }
 }
 
 impl Display for BuildResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.reproduces_issue {
-            true => f.write_str("yes"),
-            false => f.write_str("no"),
+        match (self.reproduces_issue, self.no_verify) {
+            (true, _) => f.write_str("yes"),
+            (false, true) => f.write_str("no (ignore)"),
+            (false, false) => f.write_str("no"),
         }
     }
 }

@@ -26,9 +26,9 @@ impl VisitMut for Visitor {
 }
 
 #[derive(Default)]
-pub struct Privarize {}
+pub struct Privatize {}
 
-impl Processor for Privarize {
+impl Processor for Privatize {
     fn process_file(&mut self, krate: &mut syn::File, _: &mut ProcessChecker) -> bool {
         let mut visitor = Visitor::new();
         visitor.visit_file_mut(krate);
