@@ -1,18 +1,18 @@
 use quote::ToTokens;
 use syn::{parse_quote, visit_mut::VisitMut};
 
-use crate::processor::{ProcessChecker, ProcessState, Processor, SourceFile};
+use crate::processor::{tracking, PassController, ProcessState, Processor, SourceFile};
 
 struct Visitor<'a> {
     current_path: Vec<String>,
-    checker: &'a mut ProcessChecker,
+    checker: &'a mut PassController,
 
     loop_expr: syn::Block,
     process_state: ProcessState,
 }
 
 impl<'a> Visitor<'a> {
-    fn new(checker: &'a mut ProcessChecker) -> Self {
+    fn new(checker: &'a mut PassController) -> Self {
         Self {
             current_path: Vec::new(),
             checker,
@@ -35,30 +35,7 @@ impl VisitMut for Visitor<'_> {
         }
     }
 
-    fn visit_item_fn_mut(&mut self, func: &mut syn::ItemFn) {
-        self.current_path.push(func.sig.ident.to_string());
-        syn::visit_mut::visit_item_fn_mut(self, func);
-        self.current_path.pop();
-    }
-
-    fn visit_impl_item_method_mut(&mut self, method: &mut syn::ImplItemMethod) {
-        self.current_path.push(method.sig.ident.to_string());
-        syn::visit_mut::visit_impl_item_method_mut(self, method);
-        self.current_path.pop();
-    }
-
-    fn visit_item_impl_mut(&mut self, item: &mut syn::ItemImpl) {
-        self.current_path
-            .push(item.self_ty.clone().into_token_stream().to_string());
-        syn::visit_mut::visit_item_impl_mut(self, item);
-        self.current_path.pop();
-    }
-
-    fn visit_item_mod_mut(&mut self, module: &mut syn::ItemMod) {
-        self.current_path.push(module.ident.to_string());
-        syn::visit_mut::visit_item_mod_mut(self, module);
-        self.current_path.pop();
-    }
+    tracking!();
 }
 
 #[derive(Default)]
@@ -69,7 +46,7 @@ impl Processor for EverybodyLoops {
         &mut self,
         krate: &mut syn::File,
         _: &SourceFile,
-        checker: &mut ProcessChecker,
+        checker: &mut PassController,
     ) -> ProcessState {
         let mut visitor = Visitor::new(checker);
         visitor.visit_file_mut(krate);

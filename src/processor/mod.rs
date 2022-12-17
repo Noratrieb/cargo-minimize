@@ -21,7 +21,7 @@ pub trait Processor {
         &mut self,
         krate: &mut syn::File,
         file: &SourceFile,
-        checker: &mut ProcessChecker,
+        checker: &mut PassController,
     ) -> ProcessState;
 
     fn name(&self) -> &'static str;
@@ -88,7 +88,7 @@ impl Minimizer {
 
         let mut refresh_and_try_again = false;
 
-        'pass: loop {
+        loop {
             println!("Starting a round of {}", pass.name());
             let mut changes = Changes::default();
 
@@ -104,7 +104,7 @@ impl Minimizer {
                 let mut krate = syn::parse_file(change.before_content())
                     .with_context(|| format!("parsing file {file_display}"))?;
 
-                let has_made_change = pass.process_file(&mut krate, file, &mut ProcessChecker {});
+                let has_made_change = pass.process_file(&mut krate, file, &mut PassController {});
 
                 match has_made_change {
                     ProcessState::Changed | ProcessState::FileInvalidated => {
@@ -143,20 +143,59 @@ impl Minimizer {
                 }
 
                 println!("Finished {}", pass.name());
-                break 'pass;
+                return Ok(());
             } else {
                 refresh_and_try_again = false;
             }
         }
-
-        Ok(())
     }
 }
 
-pub struct ProcessChecker {}
+pub struct PassController {}
 
-impl ProcessChecker {
+impl PassController {
     pub fn can_process(&mut self, _: &[String]) -> bool {
+        // FIXME: Actually do smart things here.
         true
     }
 }
+
+macro_rules! tracking {
+    () => {
+        tracking!(visit_item_fn_mut);
+        tracking!(visit_impl_item_method_mut);
+        tracking!(visit_item_impl_mut);
+        tracking!(visit_item_mod_mut);
+    };
+    (visit_item_fn_mut) => {
+        fn visit_item_fn_mut(&mut self, func: &mut syn::ItemFn) {
+            self.current_path.push(func.sig.ident.to_string());
+            syn::visit_mut::visit_item_fn_mut(self, func);
+            self.current_path.pop();
+        }
+    };
+    (visit_impl_item_method_mut) => {
+        fn visit_impl_item_method_mut(&mut self, method: &mut syn::ImplItemMethod) {
+            self.current_path.push(method.sig.ident.to_string());
+            syn::visit_mut::visit_impl_item_method_mut(self, method);
+            self.current_path.pop();
+        }
+    };
+    (visit_item_impl_mut) => {
+        fn visit_item_impl_mut(&mut self, item: &mut syn::ItemImpl) {
+            self.current_path
+                .push(item.self_ty.clone().into_token_stream().to_string());
+            syn::visit_mut::visit_item_impl_mut(self, item);
+            self.current_path.pop();
+        }
+    };
+    (visit_item_mod_mut) => {
+        fn visit_item_mod_mut(&mut self, module: &mut syn::ItemMod) {
+            self.current_path.push(module.ident.to_string());
+            syn::visit_mut::visit_item_mod_mut(self, module);
+            self.current_path.pop();
+        }
+    };
+}
+
+pub(crate) use tracking;

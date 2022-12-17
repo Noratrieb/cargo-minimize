@@ -2,9 +2,12 @@
 
 use crate::build::Build;
 
-use super::{files::Changes, Minimizer, ProcessState, Processor, SourceFile};
+use super::{
+    files::Changes, tracking, Minimizer, PassController, ProcessState, Processor, SourceFile,
+};
 use anyhow::{ensure, Context, Result};
 use proc_macro2::Span;
+use quote::ToTokens;
 use rustfix::{diagnostics::Diagnostic, Suggestion};
 use std::{
     collections::{HashMap, HashSet},
@@ -120,14 +123,14 @@ impl Processor for DeleteUnusedFunctions {
         &mut self,
         krate: &mut syn::File,
         file: &SourceFile,
-        _: &mut super::ProcessChecker,
+        checker: &mut super::PassController,
     ) -> ProcessState {
         assert!(
             !self.invalid.contains(file),
             "processing with invalid state"
         );
 
-        let mut visitor = FindUnusedFunction::new(file, self.diags.iter());
+        let mut visitor = FindUnusedFunction::new(file, self.diags.iter(), checker);
         visitor.visit_file_mut(krate);
 
         if visitor.process_state == ProcessState::FileInvalidated {
@@ -161,13 +164,19 @@ impl Unused {
     }
 }
 
-struct FindUnusedFunction {
+struct FindUnusedFunction<'a> {
     unused_functions: Vec<Unused>,
     process_state: ProcessState,
+    current_path: Vec<String>,
+    checker: &'a mut PassController,
 }
 
-impl FindUnusedFunction {
-    fn new<'a>(file: &SourceFile, diags: impl Iterator<Item = &'a Diagnostic>) -> Self {
+impl<'a> FindUnusedFunction<'a> {
+    fn new<'b>(
+        file: &SourceFile,
+        diags: impl Iterator<Item = &'b Diagnostic>,
+        checker: &'a mut PassController,
+    ) -> Self {
         let unused_functions = diags
             .filter_map(|diag| {
                 // FIXME: use `code` correctly
@@ -204,6 +213,8 @@ impl FindUnusedFunction {
         Self {
             unused_functions,
             process_state: ProcessState::NoChange,
+            current_path: Vec::new(),
+            checker,
         }
     }
 
@@ -224,12 +235,15 @@ impl FindUnusedFunction {
             self.process_state = ProcessState::FileInvalidated;
         }
 
-        span_matches == 0
+        span_matches == 0 && self.checker.can_process(&self.current_path)
     }
 }
 
-impl VisitMut for FindUnusedFunction {
+impl VisitMut for FindUnusedFunction<'_> {
     fn visit_item_impl_mut(&mut self, item_impl: &mut syn::ItemImpl) {
+        self.current_path
+            .push(item_impl.self_ty.clone().into_token_stream().to_string());
+
         item_impl.items.retain(|item| match item {
             ImplItem::Method(method) => {
                 let span = method.sig.ident.span();
@@ -240,6 +254,8 @@ impl VisitMut for FindUnusedFunction {
         });
 
         syn::visit_mut::visit_item_impl_mut(self, item_impl);
+
+        self.current_path.pop();
     }
 
     fn visit_file_mut(&mut self, krate: &mut syn::File) {
@@ -256,6 +272,8 @@ impl VisitMut for FindUnusedFunction {
     }
 
     fn visit_item_mod_mut(&mut self, module: &mut syn::ItemMod) {
+        self.current_path.push(module.ident.to_string());
+
         if let Some((_, content)) = &mut module.content {
             content.retain(|item| match item {
                 Item::Fn(func) => {
@@ -268,5 +286,10 @@ impl VisitMut for FindUnusedFunction {
         }
 
         syn::visit_mut::visit_item_mod_mut(self, module);
+
+        self.current_path.pop();
     }
+
+    tracking!(visit_item_fn_mut);
+    tracking!(visit_impl_item_method_mut);
 }
