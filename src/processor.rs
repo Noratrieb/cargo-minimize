@@ -8,7 +8,7 @@ use anyhow::{ensure, Context, Result};
 use crate::build::Build;
 
 pub trait Processor {
-    fn process_file(&mut self, krate: &mut syn::File) -> bool;
+    fn process_file(&mut self, krate: &mut syn::File, checker: &mut ProcessChecker) -> bool;
 
     fn name(&self) -> &'static str;
 }
@@ -64,7 +64,7 @@ impl Minimizer {
                     let mut krate = syn::parse_file(&before_string)
                         .with_context(|| format!("parsing file {file_display}"))?;
 
-                    let has_made_change = pass.process_file(&mut krate);
+                    let has_made_change = pass.process_file(&mut krate, &mut ProcessChecker {});
 
                     if has_made_change {
                         let result = prettyplease::unparse(&krate);
@@ -93,5 +93,13 @@ impl Minimizer {
         }
 
         Ok(())
+    }
+}
+
+pub struct ProcessChecker {}
+
+impl ProcessChecker {
+    pub fn can_process(&mut self, _: &[String]) -> bool {
+        true
     }
 }

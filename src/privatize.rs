@@ -1,6 +1,6 @@
 use syn::{parse_quote, visit_mut::VisitMut, Visibility};
 
-use crate::processor::Processor;
+use crate::processor::{ProcessChecker, Processor};
 
 struct Visitor {
     pub_crate: Visibility,
@@ -29,7 +29,7 @@ impl VisitMut for Visitor {
 pub struct Privarize {}
 
 impl Processor for Privarize {
-    fn process_file(&mut self, krate: &mut syn::File) -> bool {
+    fn process_file(&mut self, krate: &mut syn::File, _: &mut ProcessChecker) -> bool {
         let mut visitor = Visitor::new();
         visitor.visit_file_mut(krate);
         visitor.has_made_change

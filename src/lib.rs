@@ -12,7 +12,7 @@ use anyhow::Result;
 use clap::Parser;
 use processor::Minimizer;
 
-use crate::{everybody_loops::EverybodyLoops, privatize::Privarize, processor::Processor};
+use crate::{everybody_loops::EverybodyLoops, processor::Processor};
 
 #[derive(clap::Parser)]
 pub struct Options {
@@ -26,11 +26,9 @@ pub struct Options {
 pub fn minimize() -> Result<()> {
     let options = Options::parse();
 
-    let dir = options.path;
+    let build = build::Build::new(&options);
 
-    let build = build::Build::new(options.cargo, options.verify_error_path, dir.clone());
-
-    let mut minimizer = Minimizer::new_glob_dir(&dir, build);
+    let mut minimizer = Minimizer::new_glob_dir(&options.path, build);
 
     println!("{minimizer:?}");
 
