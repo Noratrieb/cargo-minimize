@@ -112,7 +112,7 @@ impl Processor for DeleteUnusedFunctions {
     fn refresh_state(&mut self) -> Result<()> {
         let (diags, _) = self.build.get_diags().context("getting diagnostics")?;
         self.diags = diags;
-        self.invalid = HashSet::new();
+        self.invalid.clear();
         Ok(())
     }
 
