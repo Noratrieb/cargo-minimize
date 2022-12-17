@@ -5,6 +5,7 @@ exclude = ["test-cases/*"]
 name = "cargo-minimize"
 version = "0.1.0"
 edition = "2021"
+about = "A tool for minimizing rustc ICEs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

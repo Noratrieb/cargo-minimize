@@ -26,12 +26,12 @@ enum BuildMode {
 
 impl Build {
     pub fn new(options: &Options) -> Self {
-        let mode = if options.cargo {
-            BuildMode::Cargo
+        let mode = if options.rustc {
+            BuildMode::Rustc
         } else if let Some(script) = &options.verify_error_path {
             BuildMode::Script(script.clone())
         } else {
-            BuildMode::Rustc
+            BuildMode::Cargo
         };
         Self {
             inner: Rc::new(BuildInner {

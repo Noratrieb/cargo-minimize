@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use std::path::PathBuf;
 
 mod build;
@@ -15,24 +13,30 @@ use processor::Minimizer;
 use crate::{everybody_loops::EverybodyLoops, privatize::Privatize, processor::Processor};
 
 #[derive(clap::Parser)]
+#[command(version, about, name = "cargo", bin_name = "cargo")]
+enum Cargo {
+    Minimize(Options),
+}
+
+#[derive(clap::Args, Debug)]
 pub struct Options {
     #[arg(short, long)]
     verify_error_path: Option<PathBuf>,
     #[arg(long)]
-    cargo: bool,
+    rustc: bool,
     #[arg(long)]
     no_verify: bool,
+
+    #[arg(default_value = "src")]
     path: PathBuf,
 }
 
 pub fn minimize() -> Result<()> {
-    let options = Options::parse();
+    let Cargo::Minimize(options) = Cargo::parse();
 
     let build = build::Build::new(&options);
 
     let mut minimizer = Minimizer::new_glob_dir(&options.path, build);
-
-    println!("{minimizer:?}");
 
     minimizer.delete_dead_code().context("deleting dead code")?;
 

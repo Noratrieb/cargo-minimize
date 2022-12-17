@@ -1,3 +1,6 @@
+// this code is pretty neat i guess but i dont have a use for it right now
+#![allow(dead_code)]
+
 use anyhow::{bail, Context, Result};
 use cargo::{
     core::{

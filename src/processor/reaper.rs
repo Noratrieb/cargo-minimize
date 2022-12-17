@@ -144,7 +144,6 @@ impl Processor for DeleteUnusedFunctions {
 
 #[derive(Debug)]
 struct Unused {
-    name: String,
     line: usize,
     column: Range<usize>,
 }
@@ -184,7 +183,6 @@ impl FindUnusedFunction {
                     return None;
                 }
 
-                let name = diag.message.split("`").nth(1)?.to_owned();
                 let span = &diag.spans[0];
 
                 assert_eq!(
@@ -197,7 +195,6 @@ impl FindUnusedFunction {
                 }
 
                 Some(Unused {
-                    name,
                     line: span.line_start,
                     column: (span.column_start - 1)..(span.column_end - 1),
                 })

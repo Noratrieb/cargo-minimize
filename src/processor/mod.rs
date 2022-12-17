@@ -57,6 +57,9 @@ impl Minimizer {
             .map(|entry| SourceFile {
                 path: entry.into_path(),
             })
+            .inspect(|file| {
+                println!("- {}", file.path.display());
+            })
             .collect();
 
         Self { files, build }
@@ -94,7 +97,8 @@ impl Minimizer {
                     let mut krate = syn::parse_file(change.before_content())
                         .with_context(|| format!("parsing file {file_display}"))?;
 
-                    let has_made_change = pass.process_file(&mut krate, file, &mut ProcessChecker {});
+                    let has_made_change =
+                        pass.process_file(&mut krate, file, &mut ProcessChecker {});
 
                     match has_made_change {
                         ProcessState::Changed | ProcessState::FileInvalidated => {
