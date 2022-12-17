@@ -5,13 +5,24 @@ use std::{collections::HashSet, ffi::OsStr, path::Path};
 
 use anyhow::{ensure, Context, Result};
 
-use crate::{build::Build, processor::files::Changes, Options};
+use crate::{build::Build, processor::files::Changes};
 
-use self::files::SourceFile;
+pub use self::files::SourceFile;
 
 pub trait Processor {
-    fn process_file(&mut self, krate: &mut syn::File, checker: &mut ProcessChecker)
-        -> ProcessState;
+    fn refresh_state(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    /// Process a file. The state of the processor might get invalidated in the process as signaled with
+    /// `ProcessState::FileInvalidated`. When a file is invalidated, the minimizer will call `Processor::refersh_state`
+    /// before calling the this function on the same file again.
+    fn process_file(
+        &mut self,
+        krate: &mut syn::File,
+        file: &SourceFile,
+        checker: &mut ProcessChecker,
+    ) -> ProcessState;
 
     fn name(&self) -> &'static str;
 }
@@ -27,11 +38,10 @@ pub enum ProcessState {
 pub struct Minimizer {
     files: Vec<SourceFile>,
     build: Build,
-    no_verify: bool,
 }
 
 impl Minimizer {
-    pub fn new_glob_dir(path: &Path, build: Build, options: &Options) -> Self {
+    pub fn new_glob_dir(path: &Path, build: Build) -> Self {
         let walk = walkdir::WalkDir::new(path);
 
         let files = walk
@@ -49,29 +59,25 @@ impl Minimizer {
             })
             .collect();
 
-        Self {
-            files,
-            build,
-            no_verify: options.no_verify,
-        }
+        Self { files, build }
     }
 
     pub fn run_passes<'a>(
         &mut self,
-        passes: impl IntoIterator<Item = Box<dyn Processor>>,
+        passes: impl IntoIterator<Item = Box<dyn Processor + 'a>>,
     ) -> Result<()> {
         let inital_build = self.build.build()?;
         println!("Initial build: {}", inital_build);
-        if !self.no_verify {
-            ensure!(
-                inital_build.reproduces_issue(),
-                "Initial build must reproduce issue"
-            );
-        }
+        ensure!(
+            inital_build.reproduces_issue(),
+            "Initial build must reproduce issue"
+        );
 
         let mut invalidated_files = HashSet::new();
 
         for mut pass in passes {
+            let mut refresh_and_try_again = false;
+
             'pass: loop {
                 println!("Starting a round of {}", pass.name());
                 let mut changes = Changes::default();
@@ -88,7 +94,7 @@ impl Minimizer {
                     let mut krate = syn::parse_file(change.before_content())
                         .with_context(|| format!("parsing file {file_display}"))?;
 
-                    let has_made_change = pass.process_file(&mut krate, &mut ProcessChecker {});
+                    let has_made_change = pass.process_file(&mut krate, file, &mut ProcessChecker {});
 
                     match has_made_change {
                         ProcessState::Changed | ProcessState::FileInvalidated => {
@@ -117,8 +123,18 @@ impl Minimizer {
                 }
 
                 if !changes.had_changes() {
+                    if !refresh_and_try_again && invalidated_files.len() > 0 {
+                        // A few files have been invalidated, let's refresh and try these again.
+                        pass.refresh_state().context("refreshing state for pass")?;
+                        refresh_and_try_again = true;
+                        println!("Refreshing files for {}", pass.name());
+                        continue;
+                    }
+
                     println!("Finished {}", pass.name());
                     break 'pass;
+                } else {
+                    refresh_and_try_again = false;
                 }
             }
         }

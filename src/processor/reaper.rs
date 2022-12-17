@@ -1,10 +1,16 @@
 //! Deletes dead code.
 
-use super::{files::Changes, Minimizer, ProcessState, Processor};
+use crate::build::Build;
+
+use super::{files::Changes, Minimizer, ProcessState, Processor, SourceFile};
 use anyhow::{ensure, Context, Result};
 use proc_macro2::Span;
 use rustfix::{diagnostics::Diagnostic, Suggestion};
-use std::{collections::HashMap, ops::Range, path::Path};
+use std::{
+    collections::{HashMap, HashSet},
+    ops::Range,
+    path::Path,
+};
 use syn::{visit_mut::VisitMut, ImplItem, Item};
 
 fn file_for_suggestion(suggestion: &Suggestion) -> &str {
@@ -15,16 +21,14 @@ impl Minimizer {
     pub fn delete_dead_code(&mut self) -> Result<()> {
         let inital_build = self.build.build()?;
         println!("Before reaper: {}", inital_build);
-        if !self.no_verify {
-            ensure!(
-                inital_build.reproduces_issue(),
-                "Initial build must reproduce issue"
-            );
-        }
+        ensure!(
+            inital_build.reproduces_issue(),
+            "Initial build must reproduce issue"
+        );
 
         let (diags, suggestions) = self
             .build
-            .get_suggestions()
+            .get_diags()
             .context("getting suggestions from rustc")?;
 
         let mut suggestions_for_file = HashMap::<_, Vec<_>>::new();
@@ -38,11 +42,10 @@ impl Minimizer {
         // Always unconditionally apply unused imports.
         self.apply_unused_imports(&suggestions_for_file)?;
 
-        self.run_passes([Box::new(DeleteUnusedFunctions {
-            diags,
-            invalid: false,
-        }) as Box<dyn Processor>])
-            .context("deleting unused functions")?;
+        self.run_passes([
+            Box::new(DeleteUnusedFunctions::new(self.build.clone(), diags)) as Box<dyn Processor>,
+        ])
+        .context("deleting unused functions")?;
 
         Ok(())
     }
@@ -91,22 +94,44 @@ impl Minimizer {
 
 struct DeleteUnusedFunctions {
     diags: Vec<Diagnostic>,
-    invalid: bool,
+    build: Build,
+    invalid: HashSet<SourceFile>,
+}
+
+impl DeleteUnusedFunctions {
+    fn new(build: Build, diags: Vec<Diagnostic>) -> Self {
+        DeleteUnusedFunctions {
+            diags,
+            build,
+            invalid: HashSet::new(),
+        }
+    }
 }
 
 impl Processor for DeleteUnusedFunctions {
+    fn refresh_state(&mut self) -> Result<()> {
+        let (diags, _) = self.build.get_diags().context("getting diagnostics")?;
+        self.diags = diags;
+        self.invalid = HashSet::new();
+        Ok(())
+    }
+
     fn process_file(
         &mut self,
         krate: &mut syn::File,
+        file: &SourceFile,
         _: &mut super::ProcessChecker,
     ) -> ProcessState {
-        assert!(!self.invalid, "processing with invalid state");
+        assert!(
+            !self.invalid.contains(file),
+            "processing with invalid state"
+        );
 
-        let mut visitor = FindUnusedFunction::new(self.diags.iter());
+        let mut visitor = FindUnusedFunction::new(file, self.diags.iter());
         visitor.visit_file_mut(krate);
 
         if visitor.process_state == ProcessState::FileInvalidated {
-            self.invalid = true;
+            self.invalid.insert(file.clone());
         }
 
         visitor.process_state
@@ -143,7 +168,7 @@ struct FindUnusedFunction {
 }
 
 impl FindUnusedFunction {
-    fn new<'a>(diags: impl Iterator<Item = &'a Diagnostic>) -> Self {
+    fn new<'a>(file: &SourceFile, diags: impl Iterator<Item = &'a Diagnostic>) -> Self {
         let unused_functions = diags
             .filter_map(|diag| {
                 // FIXME: use `code` correctly
@@ -166,6 +191,10 @@ impl FindUnusedFunction {
                     span.line_start, span.line_end,
                     "encountered multiline span in dead_code"
                 );
+
+                if Path::new(&span.file_name) != file.path {
+                    return None;
+                }
 
                 Some(Unused {
                     name,

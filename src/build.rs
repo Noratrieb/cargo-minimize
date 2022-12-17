@@ -1,12 +1,17 @@
 use anyhow::{Context, Result};
 use rustfix::diagnostics::Diagnostic;
 use serde::Deserialize;
-use std::{collections::HashSet, fmt::Display, path::PathBuf, process::Command};
+use std::{collections::HashSet, fmt::Display, path::PathBuf, process::Command, rc::Rc};
 
 use crate::Options;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Build {
+    inner: Rc<BuildInner>,
+}
+
+#[derive(Debug)]
+struct BuildInner {
     mode: BuildMode,
     input_path: PathBuf,
     no_verify: bool,
@@ -29,21 +34,23 @@ impl Build {
             BuildMode::Rustc
         };
         Self {
-            mode,
-            input_path: options.path.clone(),
-            no_verify: options.no_verify,
+            inner: Rc::new(BuildInner {
+                mode,
+                input_path: options.path.clone(),
+                no_verify: options.no_verify,
+            }),
         }
     }
 
     pub fn build(&self) -> Result<BuildResult> {
-        if self.no_verify {
+        if self.inner.no_verify {
             return Ok(BuildResult {
                 reproduces_issue: false,
                 no_verify: true,
             });
         }
 
-        let reproduces_issue = match &self.mode {
+        let reproduces_issue = match &self.inner.mode {
             BuildMode::Cargo => {
                 let mut cmd = Command::new("cargo");
                 cmd.arg("build");
@@ -62,7 +69,7 @@ impl Build {
             BuildMode::Rustc => {
                 let mut cmd = Command::new("rustc");
                 cmd.args(["--edition", "2018"]);
-                cmd.arg(&self.input_path);
+                cmd.arg(&self.inner.input_path);
 
                 cmd.output()
                     .context("spawning rustc process")?
@@ -74,12 +81,12 @@ impl Build {
 
         Ok(BuildResult {
             reproduces_issue,
-            no_verify: self.no_verify,
+            no_verify: self.inner.no_verify,
         })
     }
 
-    pub fn get_suggestions(&self) -> Result<(Vec<Diagnostic>, Vec<rustfix::Suggestion>)> {
-        let diags = match self.mode {
+    pub fn get_diags(&self) -> Result<(Vec<Diagnostic>, Vec<rustfix::Suggestion>)> {
+        let diags = match self.inner.mode {
             BuildMode::Cargo => {
                 let mut cmd = Command::new("cargo");
                 cmd.args(["build", "--message-format=json"]);
@@ -102,7 +109,7 @@ impl Build {
             BuildMode::Rustc => {
                 let mut cmd = std::process::Command::new("rustc");
                 cmd.args(["--edition", "2018", "--error-format=json"]);
-                cmd.arg(&self.input_path);
+                cmd.arg(&self.inner.input_path);
 
                 let output = cmd.output()?.stderr;
                 let output = String::from_utf8(output)?;

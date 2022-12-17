@@ -1,7 +1,7 @@
 use quote::ToTokens;
 use syn::{parse_quote, visit_mut::VisitMut};
 
-use crate::processor::{ProcessChecker, ProcessState, Processor};
+use crate::processor::{ProcessChecker, ProcessState, Processor, SourceFile};
 
 struct Visitor<'a> {
     current_path: Vec<String>,
@@ -68,6 +68,7 @@ impl Processor for EverybodyLoops {
     fn process_file(
         &mut self,
         krate: &mut syn::File,
+        _: &SourceFile,
         checker: &mut ProcessChecker,
     ) -> ProcessState {
         let mut visitor = Visitor::new(checker);

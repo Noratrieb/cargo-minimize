@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct SourceFile {
     pub path: PathBuf,
 }
@@ -71,7 +71,6 @@ impl SourceFile {
         })
     }
 }
-
 
 impl Changes {
     pub fn had_changes(&self) -> bool {
