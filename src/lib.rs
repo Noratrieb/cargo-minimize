@@ -1,15 +1,48 @@
 #![allow(dead_code)]
 
-use std::path::Path;
+use std::path::PathBuf;
 
 mod build;
+mod everybody_loops;
 mod expand;
+mod privatize;
+mod processor;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
+use clap::Parser;
+use processor::Minimizer;
 
-pub fn minimize(cargo_dir: &Path) -> Result<()> {
-    let file = expand::expand(cargo_dir).context("during expansion")?;
+use crate::{everybody_loops::EverybodyLoops, privatize::Privarize, processor::Processor};
 
+#[derive(clap::Parser)]
+pub struct Options {
+    #[arg(short, long)]
+    verify_error_path: Option<PathBuf>,
+    #[arg(long)]
+    cargo: bool,
+    path: PathBuf,
+}
+
+pub fn minimize() -> Result<()> {
+    let options = Options::parse();
+
+    let dir = options.path;
+
+    let build = build::Build::new(options.cargo, options.verify_error_path, dir.clone());
+
+    let mut minimizer = Minimizer::new_glob_dir(&dir, build);
+
+    println!("{minimizer:?}");
+
+    minimizer.run_passes([
+        //Box::new(Privarize::default()) as Box<dyn Processor>,
+        Box::new(EverybodyLoops::default()) as Box<dyn Processor>,
+    ])?;
+
+    /*
+    let file = expand::expand(&dir).context("during expansion")?;
+
+    //let file = syn::parse_str("extern { pub fn printf(format: *const ::c_char, ...) -> ::c_int; }",).unwrap();
     let file = prettyplease::unparse(&file);
 
     println!("// EXPANDED-START\n\n{file}\n\n// EXPANDED-END");
@@ -17,7 +50,7 @@ pub fn minimize(cargo_dir: &Path) -> Result<()> {
     std::fs::write("expanded.rs", file)?;
 
     println!("wow, expanded");
-    Ok(())
+    */
 
     /*
     let build = Build::new(cargo_dir);
@@ -26,4 +59,6 @@ pub fn minimize(cargo_dir: &Path) -> Result<()> {
         bail!("build must initially fail!");
     }
     */
+
+    Ok(())
 }

@@ -11,7 +11,9 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.65"
 cargo = "0.65.0"
+clap = { version = "4.0.29", features = ["derive"] }
 prettyplease = "0.1.19"
 proc-macro2 = "1.0.46"
 quote = "1.0.21"
 syn = { version = "1.0.101", features = ["full", "visit", "visit-mut"] }
+walkdir = "2.3.2"
