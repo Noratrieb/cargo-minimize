@@ -1,7 +1,7 @@
 mod files;
 mod reaper;
 
-use std::{ffi::OsStr, path::Path};
+use std::{collections::HashSet, ffi::OsStr, path::Path};
 
 use anyhow::{ensure, Context, Result};
 
@@ -10,9 +10,17 @@ use crate::{build::Build, processor::files::Changes, Options};
 use self::files::SourceFile;
 
 pub trait Processor {
-    fn process_file(&mut self, krate: &mut syn::File, checker: &mut ProcessChecker) -> bool;
+    fn process_file(&mut self, krate: &mut syn::File, checker: &mut ProcessChecker)
+        -> ProcessState;
 
     fn name(&self) -> &'static str;
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum ProcessState {
+    NoChange,
+    Changed,
+    FileInvalidated,
 }
 
 #[derive(Debug)]
@@ -61,12 +69,18 @@ impl Minimizer {
             );
         }
 
+        let mut invalidated_files = HashSet::new();
+
         for mut pass in passes {
             'pass: loop {
                 println!("Starting a round of {}", pass.name());
                 let mut changes = Changes::default();
 
                 for file in &self.files {
+                    if invalidated_files.contains(file) {
+                        continue;
+                    }
+
                     let file_display = file.path.display();
 
                     let mut change = file.try_change(&mut changes)?;
@@ -76,22 +90,29 @@ impl Minimizer {
 
                     let has_made_change = pass.process_file(&mut krate, &mut ProcessChecker {});
 
-                    if has_made_change {
-                        let result = prettyplease::unparse(&krate);
+                    match has_made_change {
+                        ProcessState::Changed | ProcessState::FileInvalidated => {
+                            let result = prettyplease::unparse(&krate);
 
-                        change.write(&result)?;
+                            change.write(&result)?;
 
-                        let after = self.build.build()?;
+                            let after = self.build.build()?;
 
-                        println!("{file_display}: After {}: {after}", pass.name());
+                            println!("{file_display}: After {}: {after}", pass.name());
 
-                        if after.reproduces_issue() {
-                            change.commit();
-                        } else {
-                            change.rollback()?;
+                            if after.reproduces_issue() {
+                                change.commit();
+                            } else {
+                                change.rollback()?;
+                            }
+
+                            if has_made_change == ProcessState::FileInvalidated {
+                                invalidated_files.insert(file);
+                            }
                         }
-                    } else {
-                        println!("{file_display}: After {}: no change", pass.name());
+                        ProcessState::NoChange => {
+                            println!("{file_display}: After {}: no change", pass.name());
+                        }
                     }
                 }
 

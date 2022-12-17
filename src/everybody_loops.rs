@@ -1,14 +1,14 @@
 use quote::ToTokens;
 use syn::{parse_quote, visit_mut::VisitMut};
 
-use crate::processor::{ProcessChecker, Processor};
+use crate::processor::{ProcessChecker, ProcessState, Processor};
 
 struct Visitor<'a> {
     current_path: Vec<String>,
     checker: &'a mut ProcessChecker,
 
     loop_expr: syn::Block,
-    has_made_change: bool,
+    process_state: ProcessState,
 }
 
 impl<'a> Visitor<'a> {
@@ -16,7 +16,7 @@ impl<'a> Visitor<'a> {
         Self {
             current_path: Vec::new(),
             checker,
-            has_made_change: false,
+            process_state: ProcessState::NoChange,
             loop_expr: parse_quote! { { loop {} } },
         }
     }
@@ -30,7 +30,7 @@ impl VisitMut for Visitor<'_> {
             }))] if loop_body.stmts.is_empty() => {}
             _ => {
                 *block = self.loop_expr.clone();
-                self.has_made_change = true;
+                self.process_state = ProcessState::Changed;
             }
         }
     }
@@ -65,10 +65,14 @@ impl VisitMut for Visitor<'_> {
 pub struct EverybodyLoops;
 
 impl Processor for EverybodyLoops {
-    fn process_file(&mut self, krate: &mut syn::File, checker: &mut ProcessChecker) -> bool {
+    fn process_file(
+        &mut self,
+        krate: &mut syn::File,
+        checker: &mut ProcessChecker,
+    ) -> ProcessState {
         let mut visitor = Visitor::new(checker);
         visitor.visit_file_mut(krate);
-        visitor.has_made_change
+        visitor.process_state
     }
 
     fn name(&self) -> &'static str {

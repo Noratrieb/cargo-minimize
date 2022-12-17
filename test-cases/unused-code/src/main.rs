@@ -1,5 +1,8 @@
-fn unused() {}
-
-fn main() {
-    unused();
+fn unused() {
+    loop {}
 }
+fn main() {
+    loop {}
+}
+
+mod other;

@@ -1,6 +1,6 @@
 //! Deletes dead code.
 
-use super::{files::Changes, Minimizer, Processor};
+use super::{files::Changes, Minimizer, ProcessState, Processor};
 use anyhow::{ensure, Context, Result};
 use proc_macro2::Span;
 use rustfix::{diagnostics::Diagnostic, Suggestion};
@@ -38,7 +38,10 @@ impl Minimizer {
         // Always unconditionally apply unused imports.
         self.apply_unused_imports(&suggestions_for_file)?;
 
-        self.run_passes([Box::new(DeleteUnusedFunctions(diags)) as Box<dyn Processor>])
+        self.run_passes([Box::new(DeleteUnusedFunctions {
+            diags,
+            invalid: false,
+        }) as Box<dyn Processor>])
             .context("deleting unused functions")?;
 
         Ok(())
@@ -49,11 +52,12 @@ impl Minimizer {
         suggestions: &HashMap<&str, Vec<&Suggestion>>,
     ) -> Result<()> {
         for (file, suggestions) in suggestions {
-            let file = self
+            let Some(file) = self
                 .files
                 .iter()
-                .find(|source| source.path == Path::new(file))
-                .expect("unknown file");
+                .find(|source| source.path == Path::new(file)) else {
+                    continue;
+                };
 
             let mut changes = &mut Changes::default();
 
@@ -85,14 +89,27 @@ impl Minimizer {
     }
 }
 
-struct DeleteUnusedFunctions(Vec<Diagnostic>);
+struct DeleteUnusedFunctions {
+    diags: Vec<Diagnostic>,
+    invalid: bool,
+}
 
 impl Processor for DeleteUnusedFunctions {
-    fn process_file(&mut self, krate: &mut syn::File, _: &mut super::ProcessChecker) -> bool {
-        let mut visitor = FindUnusedFunction::new(self.0.iter());
+    fn process_file(
+        &mut self,
+        krate: &mut syn::File,
+        _: &mut super::ProcessChecker,
+    ) -> ProcessState {
+        assert!(!self.invalid, "processing with invalid state");
+
+        let mut visitor = FindUnusedFunction::new(self.diags.iter());
         visitor.visit_file_mut(krate);
 
-        visitor.has_change
+        if visitor.process_state == ProcessState::FileInvalidated {
+            self.invalid = true;
+        }
+
+        visitor.process_state
     }
 
     fn name(&self) -> &'static str {
@@ -122,7 +139,7 @@ impl Unused {
 
 struct FindUnusedFunction {
     unused_functions: Vec<Unused>,
-    has_change: bool,
+    process_state: ProcessState,
 }
 
 impl FindUnusedFunction {
@@ -160,7 +177,7 @@ impl FindUnusedFunction {
 
         Self {
             unused_functions,
-            has_change: false,
+            process_state: ProcessState::NoChange,
         }
     }
 
@@ -174,11 +191,11 @@ impl FindUnusedFunction {
 
         assert!(
             span_matches < 2,
-            "multiple dead_code spans matched identifier: {span_matches}"
+            "multiple dead_code spans matched identifier: {span_matches}."
         );
 
         if span_matches == 1 {
-            self.has_change = true;
+            self.process_state = ProcessState::FileInvalidated;
         }
 
         span_matches == 0

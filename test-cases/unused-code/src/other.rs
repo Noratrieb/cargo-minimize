@@ -1,0 +1,3 @@
+fn unused() {
+    loop {}
+}

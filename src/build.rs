@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use rustfix::diagnostics::Diagnostic;
-use std::{collections::HashSet, fmt::Display, path::PathBuf};
+use serde::Deserialize;
+use std::{collections::HashSet, fmt::Display, path::PathBuf, process::Command};
 
 use crate::Options;
 
@@ -35,9 +36,16 @@ impl Build {
     }
 
     pub fn build(&self) -> Result<BuildResult> {
+        if self.no_verify {
+            return Ok(BuildResult {
+                reproduces_issue: false,
+                no_verify: true,
+            });
+        }
+
         let reproduces_issue = match &self.mode {
             BuildMode::Cargo => {
-                let mut cmd = std::process::Command::new("cargo");
+                let mut cmd = Command::new("cargo");
                 cmd.arg("build");
 
                 let output =
@@ -47,12 +55,12 @@ impl Build {
                 output.contains("internal compiler error")
             }
             BuildMode::Script(script_path) => {
-                let mut cmd = std::process::Command::new(script_path);
+                let mut cmd = Command::new(script_path);
 
                 cmd.output().context("spawning script")?.status.success()
             }
             BuildMode::Rustc => {
-                let mut cmd = std::process::Command::new("rustc");
+                let mut cmd = Command::new("rustc");
                 cmd.args(["--edition", "2018"]);
                 cmd.arg(&self.input_path);
 
@@ -71,11 +79,26 @@ impl Build {
     }
 
     pub fn get_suggestions(&self) -> Result<(Vec<Diagnostic>, Vec<rustfix::Suggestion>)> {
-        match self.mode {
+        let diags = match self.mode {
             BuildMode::Cargo => {
-                todo!();
+                let mut cmd = Command::new("cargo");
+                cmd.args(["build", "--message-format=json"]);
+
+                let cmd_output = cmd.output()?;
+                let output = String::from_utf8(cmd_output.stdout.clone())?;
+
+                let messages = serde_json::Deserializer::from_str(&output)
+                    .into_iter::<CargoJsonCompileMessage>()
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                let diags = messages
+                    .into_iter()
+                    .filter(|msg| msg.reason == "compiler-message")
+                    .flat_map(|msg| msg.message)
+                    .collect();
+
+                diags
             }
-            BuildMode::Script(_) => todo!(),
             BuildMode::Rustc => {
                 let mut cmd = std::process::Command::new("rustc");
                 cmd.args(["--edition", "2018", "--error-format=json"]);
@@ -84,18 +107,26 @@ impl Build {
                 let output = cmd.output()?.stderr;
                 let output = String::from_utf8(output)?;
 
-                let diags = serde_json::Deserializer::from_str(&output).into_iter::<Diagnostic>().collect::<Result<_, _>>()?;
+                let diags = serde_json::Deserializer::from_str(&output)
+                    .into_iter::<Diagnostic>()
+                    .collect::<Result<_, _>>()?;
 
-                let suggestions = rustfix::get_suggestions_from_json(
-                    &output,
-                    &HashSet::new(),
-                    rustfix::Filter::Everything,
-                )
-                .context("reading output as rustfix suggestions")?;
-
-                Ok((diags, suggestions))
+                diags
             }
+            BuildMode::Script(_) => todo!(),
+        };
+
+        let mut suggestions = Vec::new();
+        for cargo_msg in &diags {
+            // One diagnostic line might have multiple suggestions
+            suggestions.extend(rustfix::collect_suggestions(
+                cargo_msg,
+                &HashSet::new(),
+                rustfix::Filter::Everything,
+            ));
         }
+
+        Ok((diags, suggestions))
     }
 }
 
@@ -114,8 +145,14 @@ impl Display for BuildResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match (self.reproduces_issue, self.no_verify) {
             (true, _) => f.write_str("yes"),
-            (false, true) => f.write_str("no (ignore)"),
+            (false, true) => f.write_str("yes (no-verify)"),
             (false, false) => f.write_str("no"),
         }
     }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CargoJsonCompileMessage {
+    pub reason: String,
+    pub message: Option<Diagnostic>,
 }

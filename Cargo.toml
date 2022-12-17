@@ -16,6 +16,7 @@ prettyplease = "0.1.19"
 proc-macro2 = { version = "1.0.48", features = ["span-locations"] }
 quote = "1.0.21"
 rustfix = "0.6.1"
+serde = { version = "1.0.151", features = ["derive"] }
 serde_json = "1.0.90"
 syn = { version = "1.0.101", features = ["full", "visit", "visit-mut"] }
 walkdir = "2.3.2"
