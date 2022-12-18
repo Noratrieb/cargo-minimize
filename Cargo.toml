@@ -5,7 +5,7 @@ exclude = ["test-cases/*"]
 name = "cargo-minimize"
 version = "0.1.0"
 edition = "2021"
-about = "A tool for minimizing rustc ICEs"
+description = "A tool for minimizing rustc ICEs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -20,4 +20,7 @@ rustfix = "0.6.1"
 serde = { version = "1.0.151", features = ["derive"] }
 serde_json = "1.0.90"
 syn = { version = "1.0.101", features = ["full", "visit", "visit-mut"] }
+tracing = "0.1.37"
+tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
+tracing-tree = "0.2.2"
 walkdir = "2.3.2"

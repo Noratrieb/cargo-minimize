@@ -5,7 +5,7 @@ use crate::build::Build;
 use super::{
     files::Changes, tracking, Minimizer, PassController, ProcessState, Processor, SourceFile,
 };
-use anyhow::{ensure, Context, Result};
+use anyhow::{Context, Result};
 use proc_macro2::Span;
 use quote::ToTokens;
 use rustfix::{diagnostics::Diagnostic, Suggestion};
@@ -24,10 +24,8 @@ impl Minimizer {
     pub fn delete_dead_code(&mut self) -> Result<()> {
         let inital_build = self.build.build()?;
         println!("Before reaper: {}", inital_build);
-        ensure!(
-            inital_build.reproduces_issue(),
-            "Initial build must reproduce issue"
-        );
+
+        inital_build.require_reproduction("Initial")?;
 
         let (diags, suggestions) = self
             .build

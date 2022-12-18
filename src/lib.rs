@@ -1,4 +1,7 @@
-use std::path::PathBuf;
+#[macro_use]
+extern crate tracing;
+
+use std::{path::PathBuf, str::FromStr};
 
 mod build;
 mod everybody_loops;
@@ -31,8 +34,33 @@ pub struct Options {
     #[arg(long)]
     no_verify: bool,
 
+    #[arg(long)]
+    env: Vec<EnvVar>,
+
     #[arg(default_value = "src")]
     path: PathBuf,
+}
+
+#[derive(Debug, Clone)]
+struct EnvVar {
+    key: String,
+    value: String,
+}
+
+impl FromStr for EnvVar {
+    type Err = &'static str;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut split = s.split("=");
+        let key = split
+            .next()
+            .ok_or("env var must have KEY=VALUE format")?
+            .to_string();
+        let value = split
+            .next()
+            .ok_or("env var must have KEY=VALUE format")?
+            .to_string();
+        Ok(Self { key, value })
+    }
 }
 
 pub fn minimize() -> Result<()> {

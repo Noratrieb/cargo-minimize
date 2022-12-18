@@ -1,9 +1,9 @@
 mod files;
 mod reaper;
 
-use std::{borrow::Borrow, collections::HashSet, ffi::OsStr, mem, path::Path};
+use std::{borrow::Borrow, collections::HashSet, ffi::OsStr, fmt::Debug, mem, path::Path};
 
-use anyhow::{ensure, Context, Result};
+use anyhow::{Context, Result};
 
 use crate::{build::Build, processor::files::Changes};
 
@@ -25,6 +25,12 @@ pub trait Processor {
     ) -> ProcessState;
 
     fn name(&self) -> &'static str;
+}
+
+impl Debug for dyn Processor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -71,10 +77,7 @@ impl Minimizer {
     ) -> Result<()> {
         let inital_build = self.build.build()?;
         println!("Initial build: {}", inital_build);
-        ensure!(
-            inital_build.reproduces_issue(),
-            "Initial build must reproduce issue"
-        );
+        inital_build.require_reproduction("Initial")?;
 
         for mut pass in passes {
             self.run_pass(&mut *pass)?;
@@ -89,7 +92,9 @@ impl Minimizer {
         let mut refresh_and_try_again = false;
 
         loop {
-            println!("Starting a round of {}", pass.name());
+            let span = info_span!("Starting round of pass", name = pass.name());
+            let _enter = span.enter();
+
             let mut changes = Changes::default();
 
             for file in &self.files {
@@ -176,12 +181,18 @@ impl Minimizer {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 struct AstPath(Vec<String>);
 
 impl Borrow<[String]> for AstPath {
     fn borrow(&self) -> &[String] {
         &self.0
+    }
+}
+
+impl Debug for AstPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "AstPath({:?})", self.0)
     }
 }
 

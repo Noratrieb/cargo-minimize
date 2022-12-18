@@ -1,9 +1,9 @@
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use rustfix::diagnostics::Diagnostic;
 use serde::Deserialize;
 use std::{collections::HashSet, fmt::Display, path::PathBuf, process::Command, rc::Rc};
 
-use crate::Options;
+use crate::{EnvVar, Options};
 
 #[derive(Debug, Clone)]
 pub struct Build {
@@ -15,6 +15,7 @@ struct BuildInner {
     mode: BuildMode,
     input_path: PathBuf,
     no_verify: bool,
+    env: Vec<EnvVar>,
 }
 
 #[derive(Debug)]
@@ -38,11 +39,13 @@ impl Build {
                     .map(|cmd| cmd.split_whitespace().map(ToString::to_string).collect()),
             }
         };
+
         Self {
             inner: Rc::new(BuildInner {
                 mode,
                 input_path: options.path.clone(),
                 no_verify: options.no_verify,
+                env: options.env.clone(),
             }),
         }
     }
@@ -52,10 +55,11 @@ impl Build {
             return Ok(BuildResult {
                 reproduces_issue: false,
                 no_verify: true,
+                output: String::new(),
             });
         }
 
-        let reproduces_issue = match &self.inner.mode {
+        let (reproduces_issue, output) = match &self.inner.mode {
             BuildMode::Cargo { args } => {
                 let mut cmd = Command::new("cargo");
                 cmd.arg("build");
@@ -64,33 +68,58 @@ impl Build {
                     cmd.arg(arg);
                 }
 
-                let output =
-                    String::from_utf8(cmd.output().context("spawning rustc process")?.stderr)
-                        .unwrap();
+                for env in &self.inner.env {
+                    cmd.env(&env.key, &env.value);
+                }
 
-                output.contains("internal compiler error")
+                let outputs = cmd.output().context("spawning rustc process")?;
+
+                let output = String::from_utf8(outputs.stderr)?;
+
+                (
+                    outputs.status.code() == Some(101)
+                        || output.contains("internal compiler error"),
+                    output,
+                )
             }
             BuildMode::Script(script_path) => {
                 let mut cmd = Command::new(script_path);
 
-                cmd.output().context("spawning script")?.status.success()
+                for env in &self.inner.env {
+                    cmd.env(&env.key, &env.value);
+                }
+
+                let outputs = cmd.output().context("spawning script")?;
+
+                let output = String::from_utf8(outputs.stderr)?;
+
+                (outputs.status.success(), output)
             }
             BuildMode::Rustc => {
                 let mut cmd = Command::new("rustc");
-                cmd.args(["--edition", "2018"]);
+                cmd.args(["--edition", "2021"]);
                 cmd.arg(&self.inner.input_path);
 
-                cmd.output()
-                    .context("spawning rustc process")?
-                    .status
-                    .code()
-                    == Some(101)
+                for env in &self.inner.env {
+                    cmd.env(&env.key, &env.value);
+                }
+
+                let outputs = cmd.output().context("spawning rustc process")?;
+
+                let output = String::from_utf8(outputs.stderr)?;
+
+                (
+                    outputs.status.code() == Some(101)
+                        || output.contains("internal compiler error"),
+                    output,
+                )
             }
         };
 
         Ok(BuildResult {
             reproduces_issue,
             no_verify: self.inner.no_verify,
+            output,
         })
     }
 
@@ -102,6 +131,10 @@ impl Build {
 
                 for arg in args.into_iter().flatten() {
                     cmd.arg(arg);
+                }
+
+                for env in &self.inner.env {
+                    cmd.env(&env.key, &env.value);
                 }
 
                 let cmd_output = cmd.output()?;
@@ -121,8 +154,12 @@ impl Build {
             }
             BuildMode::Rustc => {
                 let mut cmd = std::process::Command::new("rustc");
-                cmd.args(["--edition", "2018", "--error-format=json"]);
+                cmd.args(["--edition", "2021", "--error-format=json"]);
                 cmd.arg(&self.inner.input_path);
+
+                for env in &self.inner.env {
+                    cmd.env(&env.key, &env.value);
+                }
 
                 let output = cmd.output()?.stderr;
                 let output = String::from_utf8(output)?;
@@ -153,9 +190,20 @@ impl Build {
 pub struct BuildResult {
     reproduces_issue: bool,
     no_verify: bool,
+    output: String,
 }
 
 impl BuildResult {
+    pub fn require_reproduction(&self, build: &str) -> Result<()> {
+        if !self.reproduces_issue() {
+            bail!(
+                "{build} build must reproduce issue. Output:\n{}",
+                self.output
+            );
+        }
+        Ok(())
+    }
+
     pub fn reproduces_issue(&self) -> bool {
         self.reproduces_issue || self.no_verify
     }
