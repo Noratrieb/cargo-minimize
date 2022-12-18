@@ -226,16 +226,16 @@ impl<'a> FindUnusedFunction<'a> {
             .filter(|&matches| matches)
             .count();
 
-        assert!(
-            span_matches < 2,
-            "multiple dead_code spans matched identifier: {span_matches}."
-        );
-
-        if span_matches == 1 {
-            self.process_state = ProcessState::FileInvalidated;
+        match span_matches {
+            0 => true,
+            1 => {
+                self.process_state = ProcessState::FileInvalidated;
+                !self.checker.can_process(&self.current_path)
+            }
+            _ => {
+                panic!("multiple dead_code spans matched identifier: {span_matches}.");
+            }
         }
-
-        span_matches == 0 && self.checker.can_process(&self.current_path)
     }
 }
 
@@ -246,9 +246,14 @@ impl VisitMut for FindUnusedFunction<'_> {
 
         item_impl.items.retain(|item| match item {
             ImplItem::Method(method) => {
+                self.current_path.push(method.sig.ident.to_string());
+
                 let span = method.sig.ident.span();
 
-                self.should_retain_item(span)
+                let should_retain = self.should_retain_item(span);
+
+                self.current_path.pop();
+                should_retain
             }
             _ => true,
         });
@@ -261,9 +266,13 @@ impl VisitMut for FindUnusedFunction<'_> {
     fn visit_file_mut(&mut self, krate: &mut syn::File) {
         krate.items.retain(|item| match item {
             Item::Fn(func) => {
-                let span = func.sig.ident.span();
+                self.current_path.push(func.sig.ident.to_string());
 
-                self.should_retain_item(span)
+                let span = func.sig.ident.span();
+                let should_retain = self.should_retain_item(span);
+
+                self.current_path.pop();
+                should_retain
             }
             _ => true,
         });
@@ -277,9 +286,13 @@ impl VisitMut for FindUnusedFunction<'_> {
         if let Some((_, content)) = &mut module.content {
             content.retain(|item| match item {
                 Item::Fn(func) => {
-                    let span = func.sig.ident.span();
+                    self.current_path.push(func.sig.ident.to_string());
 
-                    self.should_retain_item(span)
+                    let span = func.sig.ident.span();
+                    let should_retain = self.should_retain_item(span);
+
+                    self.current_path.pop();
+                    should_retain
                 }
                 _ => true,
             })

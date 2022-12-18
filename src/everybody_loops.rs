@@ -27,11 +27,12 @@ impl VisitMut for Visitor<'_> {
         match block.stmts.as_slice() {
             [syn::Stmt::Expr(syn::Expr::Loop(syn::ExprLoop {
                 body: loop_body, ..
-            }))] if loop_body.stmts.is_empty() && self.checker.can_process(&self.current_path) => {}
-            _ => {
+            }))] if loop_body.stmts.is_empty() => {}
+            _ if self.checker.can_process(&self.current_path) => {
                 *block = self.loop_expr.clone();
                 self.process_state = ProcessState::Changed;
             }
+            _ => {}
         }
     }
 

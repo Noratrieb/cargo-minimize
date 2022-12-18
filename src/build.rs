@@ -19,7 +19,7 @@ struct BuildInner {
 
 #[derive(Debug)]
 enum BuildMode {
-    Cargo,
+    Cargo { args: Option<Vec<String>> },
     Script(PathBuf),
     Rustc,
 }
@@ -28,10 +28,15 @@ impl Build {
     pub fn new(options: &Options) -> Self {
         let mode = if options.rustc {
             BuildMode::Rustc
-        } else if let Some(script) = &options.verify_error_path {
+        } else if let Some(script) = &options.script_path {
             BuildMode::Script(script.clone())
         } else {
-            BuildMode::Cargo
+            BuildMode::Cargo {
+                args: options
+                    .cargo_args
+                    .as_ref()
+                    .map(|cmd| cmd.split_whitespace().map(ToString::to_string).collect()),
+            }
         };
         Self {
             inner: Rc::new(BuildInner {
@@ -51,9 +56,13 @@ impl Build {
         }
 
         let reproduces_issue = match &self.inner.mode {
-            BuildMode::Cargo => {
+            BuildMode::Cargo { args } => {
                 let mut cmd = Command::new("cargo");
                 cmd.arg("build");
+
+                for arg in args.into_iter().flatten() {
+                    cmd.arg(arg);
+                }
 
                 let output =
                     String::from_utf8(cmd.output().context("spawning rustc process")?.stderr)
@@ -86,10 +95,14 @@ impl Build {
     }
 
     pub fn get_diags(&self) -> Result<(Vec<Diagnostic>, Vec<rustfix::Suggestion>)> {
-        let diags = match self.inner.mode {
-            BuildMode::Cargo => {
+        let diags = match &self.inner.mode {
+            BuildMode::Cargo { args } => {
                 let mut cmd = Command::new("cargo");
                 cmd.args(["build", "--message-format=json"]);
+
+                for arg in args.into_iter().flatten() {
+                    cmd.arg(arg);
+                }
 
                 let cmd_output = cmd.output()?;
                 let output = String::from_utf8(cmd_output.stdout.clone())?;

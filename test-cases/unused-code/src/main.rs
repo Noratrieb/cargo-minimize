@@ -1,8 +1,8 @@
 fn unused() {
-    loop {}
+    this_is_required_to_error_haha();
 }
 fn main() {
-    loop {}
+    other::unused();
 }
 
 mod other;

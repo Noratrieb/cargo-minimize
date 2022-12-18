@@ -1,3 +1,3 @@
-fn unused() {
-    loop {}
+pub fn unused() {
+    
 }

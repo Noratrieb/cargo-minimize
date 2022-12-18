@@ -21,7 +21,11 @@ enum Cargo {
 #[derive(clap::Args, Debug)]
 pub struct Options {
     #[arg(short, long)]
-    verify_error_path: Option<PathBuf>,
+    script_path: Option<PathBuf>,
+
+    #[arg(long)]
+    cargo_args: Option<String>,
+
     #[arg(long)]
     rustc: bool,
     #[arg(long)]
@@ -37,8 +41,6 @@ pub fn minimize() -> Result<()> {
     let build = build::Build::new(&options);
 
     let mut minimizer = Minimizer::new_glob_dir(&options.path, build);
-
-    minimizer.delete_dead_code().context("deleting dead code")?;
 
     minimizer.run_passes([
         Box::new(Privatize::default()) as Box<dyn Processor>,

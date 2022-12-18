@@ -1,7 +1,7 @@
 mod files;
 mod reaper;
 
-use std::{collections::HashSet, ffi::OsStr, path::Path};
+use std::{borrow::Borrow, collections::HashSet, ffi::OsStr, mem, path::Path};
 
 use anyhow::{ensure, Context, Result};
 
@@ -66,7 +66,7 @@ impl Minimizer {
     }
 
     pub fn run_passes<'a>(
-        &mut self,
+        &self,
         passes: impl IntoIterator<Item = Box<dyn Processor + 'a>>,
     ) -> Result<()> {
         let inital_build = self.build.build()?;
@@ -83,7 +83,7 @@ impl Minimizer {
         Ok(())
     }
 
-    fn run_pass(&mut self, pass: &mut dyn Processor) -> Result<()> {
+    fn run_pass(&self, pass: &mut dyn Processor) -> Result<()> {
         let mut invalidated_files = HashSet::new();
 
         let mut refresh_and_try_again = false;
@@ -97,39 +97,7 @@ impl Minimizer {
                     continue;
                 }
 
-                let file_display = file.path.display();
-
-                let mut change = file.try_change(&mut changes)?;
-
-                let mut krate = syn::parse_file(change.before_content())
-                    .with_context(|| format!("parsing file {file_display}"))?;
-
-                let has_made_change = pass.process_file(&mut krate, file, &mut PassController {});
-
-                match has_made_change {
-                    ProcessState::Changed | ProcessState::FileInvalidated => {
-                        let result = prettyplease::unparse(&krate);
-
-                        change.write(&result)?;
-
-                        let after = self.build.build()?;
-
-                        println!("{file_display}: After {}: {after}", pass.name());
-
-                        if after.reproduces_issue() {
-                            change.commit();
-                        } else {
-                            change.rollback()?;
-                        }
-
-                        if has_made_change == ProcessState::FileInvalidated {
-                            invalidated_files.insert(file);
-                        }
-                    }
-                    ProcessState::NoChange => {
-                        println!("{file_display}: After {}: no change", pass.name());
-                    }
-                }
+                self.process_file(pass, file, &mut invalidated_files, &mut changes)?;
             }
 
             if !changes.had_changes() {
@@ -149,14 +117,174 @@ impl Minimizer {
             }
         }
     }
+
+    fn process_file<'file>(
+        &self,
+        pass: &mut dyn Processor,
+        file: &'file SourceFile,
+        invalidated_files: &mut HashSet<&'file SourceFile>,
+        changes: &mut Changes,
+    ) -> Result<()> {
+        let mut checker = PassController::new();
+
+        loop {
+            dbg!(&checker);
+
+            let file_display = file.path.display();
+
+            let mut change = file.try_change(changes)?;
+
+            let mut krate = syn::parse_file(change.before_content())
+                .with_context(|| format!("parsing file {file_display}"))?;
+
+            let has_made_change = pass.process_file(&mut krate, file, &mut checker);
+
+            match has_made_change {
+                ProcessState::Changed | ProcessState::FileInvalidated => {
+                    let result = prettyplease::unparse(&krate);
+
+                    change.write(&result)?;
+
+                    let after = self.build.build()?;
+
+                    println!("{file_display}: After {}: {after}", pass.name());
+
+                    if after.reproduces_issue() {
+                        change.commit();
+                        checker.reproduces();
+                    } else {
+                        change.rollback()?;
+                        checker.does_not_reproduce();
+                    }
+
+                    if has_made_change == ProcessState::FileInvalidated {
+                        invalidated_files.insert(file);
+                    }
+                }
+                ProcessState::NoChange => {
+                    println!("{file_display}: After {}: no change", pass.name());
+                    checker.no_change();
+                }
+            }
+
+            if checker.is_finished() {
+                break;
+            }
+        }
+
+        Ok(())
+    }
 }
 
-pub struct PassController {}
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct AstPath(Vec<String>);
+
+impl Borrow<[String]> for AstPath {
+    fn borrow(&self) -> &[String] {
+        &self.0
+    }
+}
+
+#[derive(Debug)]
+pub struct PassController {
+    state: PassControllerState,
+}
+
+#[derive(Debug)]
+enum PassControllerState {
+    InitialCollection {
+        candidates: Vec<AstPath>,
+    },
+
+    Bisecting {
+        current: HashSet<AstPath>,
+        worklist: Vec<Vec<AstPath>>,
+    },
+
+    Success,
+}
 
 impl PassController {
-    pub fn can_process(&mut self, _: &[String]) -> bool {
-        // FIXME: Actually do smart things here.
-        true
+    fn new() -> Self {
+        Self {
+            state: PassControllerState::InitialCollection {
+                candidates: Vec::new(),
+            },
+        }
+    }
+
+    fn reproduces(&mut self) {
+        match &mut self.state {
+            PassControllerState::InitialCollection { .. } => {
+                self.state = PassControllerState::Success
+            }
+            PassControllerState::Bisecting {
+                current, worklist, ..
+            } => match worklist.pop() {
+                Some(next) => *current = next.into_iter().collect(),
+                None => {
+                    self.state = PassControllerState::Success;
+                }
+            },
+            PassControllerState::Success => unreachable!("Processed after success"),
+        }
+    }
+
+    fn does_not_reproduce(&mut self) {
+        match &mut self.state {
+            PassControllerState::InitialCollection { candidates } => {
+                let candidates = mem::take(candidates);
+                let half = candidates.len() / 2;
+                let (first_half, second_half) = candidates.split_at(half);
+
+                self.state = PassControllerState::Bisecting {
+                    current: first_half.iter().cloned().collect(),
+                    worklist: vec![second_half.to_owned()],
+                };
+            }
+            PassControllerState::Bisecting { current, worklist } => {
+                dbg!(&current, &worklist);
+                todo!();
+            }
+            PassControllerState::Success => unreachable!("Processed after success"),
+        }
+    }
+
+    fn no_change(&mut self) {
+        match &self.state {
+            PassControllerState::InitialCollection { candidates } => {
+                assert!(
+                    candidates.is_empty(),
+                    "No change but received candidates: {candidates:?}"
+                );
+                self.state = PassControllerState::Success;
+            }
+            PassControllerState::Bisecting { current, .. } => {
+                unreachable!("No change while bisecting, current was empty somehow: {current:?}");
+            }
+            PassControllerState::Success => {}
+        }
+    }
+
+    fn is_finished(&mut self) -> bool {
+        match &mut self.state {
+            PassControllerState::InitialCollection { .. } => false,
+            PassControllerState::Bisecting { .. } => false,
+            PassControllerState::Success => true,
+        }
+    }
+
+    pub fn can_process(&mut self, path: &[String]) -> bool {
+        match &mut self.state {
+            PassControllerState::InitialCollection { candidates } => {
+                candidates.push(AstPath(path.to_owned()));
+                true
+            }
+            PassControllerState::Bisecting { current, .. } => current.contains(path),
+            PassControllerState::Success => {
+                unreachable!("Processed further after success");
+            }
+        }
     }
 }
 
