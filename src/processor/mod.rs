@@ -167,7 +167,7 @@ impl Minimizer {
                     }
                 }
                 ProcessState::NoChange => {
-                    println!("{file_display}: After {}: no change", pass.name());
+                    println!("{file_display}: After {}: no changes", pass.name());
                     checker.no_change();
                 }
             }
