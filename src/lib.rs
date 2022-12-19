@@ -6,9 +6,11 @@ use std::{path::PathBuf, str::FromStr};
 mod build;
 mod dylib_flag;
 mod everybody_loops;
-mod expand;
 mod privatize;
 mod processor;
+
+#[cfg(this_pulls_in_cargo_which_is_a_big_dep_i_dont_like_it)]
+mod expand;
 
 use anyhow::{Context, Result};
 use clap::Parser;
