@@ -1,50 +1,40 @@
 use anyhow::{Context, Result};
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
-
+use std::{fs, path::{Path, PathBuf}};
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
-pub struct SourceFile {
-    pub path: PathBuf,
+pub(crate) struct SourceFile {
+    pub(crate) path: PathBuf,
 }
-
 #[derive(Default)]
-pub struct Changes {
+pub(crate) struct Changes {
     any_change: bool,
 }
-
-pub struct FileChange<'a, 'b> {
-    pub path: &'a Path,
+pub(crate) struct FileChange<'a, 'b> {
+    pub(crate) path: &'a Path,
     content: String,
     changes: &'b mut Changes,
     has_written_change: bool,
 }
-
 impl FileChange<'_, '_> {
-    pub fn before_content(&self) -> &str {
+    pub(crate) fn before_content(&self) -> &str {
         &self.content
     }
-
-    pub fn write(&mut self, new: &str) -> Result<()> {
+    pub(crate) fn write(&mut self, new: &str) -> Result<()> {
         self.has_written_change = true;
-        fs::write(self.path, new).with_context(|| format!("writing file {}", self.path.display()))
+        fs::write(self.path, new)
+            .with_context(|| format!("writing file {}", self.path.display()))
     }
-
-    pub fn rollback(mut self) -> Result<()> {
+    pub(crate) fn rollback(mut self) -> Result<()> {
         assert!(self.has_written_change);
         self.has_written_change = false;
         fs::write(self.path, &self.content)
             .with_context(|| format!("writing file {}", self.path.display()))
     }
-
-    pub fn commit(mut self) {
+    pub(crate) fn commit(mut self) {
         assert!(self.has_written_change);
         self.has_written_change = false;
         self.changes.any_change = true;
     }
 }
-
 impl Drop for FileChange<'_, '_> {
     fn drop(&mut self) {
         if self.has_written_change {
@@ -55,9 +45,8 @@ impl Drop for FileChange<'_, '_> {
         }
     }
 }
-
 impl SourceFile {
-    pub fn try_change<'file, 'change>(
+    pub(crate) fn try_change<'file, 'change>(
         &'file self,
         changes: &'change mut Changes,
     ) -> Result<FileChange<'file, 'change>> {
@@ -71,9 +60,8 @@ impl SourceFile {
         })
     }
 }
-
 impl Changes {
-    pub fn had_changes(&self) -> bool {
+    pub(crate) fn had_changes(&self) -> bool {
         self.any_change
     }
 }

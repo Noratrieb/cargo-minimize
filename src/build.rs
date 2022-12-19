@@ -1,20 +1,42 @@
 use anyhow::{bail, Context, Result};
 use rustfix::diagnostics::Diagnostic;
 use serde::Deserialize;
-use std::{collections::HashSet, fmt::Display, path::PathBuf, process::Command, rc::Rc};
+use std::{
+    collections::HashSet,
+    fmt::{Debug, Display},
+    path::PathBuf,
+    process::Command,
+    rc::Rc,
+};
 
-use crate::{EnvVar, Options};
+use crate::{dylib_flag::RustFunction, EnvVar, Options};
 
 #[derive(Debug, Clone)]
 pub struct Build {
     inner: Rc<BuildInner>,
 }
 
+pub enum Verify {
+    Ice,
+    Custom(RustFunction),
+    None,
+}
+
+impl Debug for Verify {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Ice => write!(f, "Ice"),
+            Self::Custom(_) => f.debug_tuple("Custom").finish(),
+            Self::None => write!(f, "None"),
+        }
+    }
+}
+
 #[derive(Debug)]
 struct BuildInner {
     mode: BuildMode,
     input_path: PathBuf,
-    no_verify: bool,
+    verify: Verify,
     env: Vec<EnvVar>,
 }
 
@@ -40,18 +62,26 @@ impl Build {
             }
         };
 
+        let verify = if options.no_verify {
+            Verify::None
+        } else if let Some(func) = options.verify_fn {
+            Verify::Custom(func)
+        } else {
+            Verify::Ice
+        };
+
         Self {
             inner: Rc::new(BuildInner {
                 mode,
                 input_path: options.path.clone(),
-                no_verify: options.no_verify,
+                verify,
                 env: options.env.clone(),
             }),
         }
     }
 
     pub fn build(&self) -> Result<BuildResult> {
-        if self.inner.no_verify {
+        if let Verify::None = self.inner.verify {
             return Ok(BuildResult {
                 reproduces_issue: false,
                 no_verify: true,
@@ -59,7 +89,7 @@ impl Build {
             });
         }
 
-        let (reproduces_issue, output) = match &self.inner.mode {
+        let (is_ice, output) = match &self.inner.mode {
             BuildMode::Cargo { args } => {
                 let mut cmd = Command::new("cargo");
                 cmd.arg("build");
@@ -116,9 +146,15 @@ impl Build {
             }
         };
 
+        let reproduces_issue = match self.inner.verify {
+            Verify::None => unreachable!("handled ealier"),
+            Verify::Ice => is_ice,
+            Verify::Custom(func) => func.call(&output),
+        };
+
         Ok(BuildResult {
             reproduces_issue,
-            no_verify: self.inner.no_verify,
+            no_verify: false,
             output,
         })
     }
@@ -143,8 +179,6 @@ impl Build {
                 let messages = serde_json::Deserializer::from_str(&output)
                     .into_iter::<CargoJsonCompileMessage>()
                     .collect::<Result<Vec<_>, _>>()?;
-
-                
 
                 messages
                     .into_iter()

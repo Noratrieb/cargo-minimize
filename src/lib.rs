@@ -4,6 +4,7 @@ extern crate tracing;
 use std::{path::PathBuf, str::FromStr};
 
 mod build;
+mod dylib_flag;
 mod everybody_loops;
 mod expand;
 mod privatize;
@@ -11,9 +12,10 @@ mod processor;
 
 use anyhow::{Context, Result};
 use clap::Parser;
+use dylib_flag::RustFunction;
 use processor::Minimizer;
 
-use crate::{processor::Processor};
+use crate::processor::Processor;
 
 #[derive(clap::Parser)]
 #[command(version, about, name = "cargo", bin_name = "cargo")]
@@ -33,6 +35,8 @@ pub struct Options {
     rustc: bool,
     #[arg(long)]
     no_verify: bool,
+    #[arg(long)]
+    verify_fn: Option<RustFunction>,
 
     #[arg(long)]
     env: Vec<EnvVar>,
