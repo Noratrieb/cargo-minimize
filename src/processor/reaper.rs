@@ -23,7 +23,7 @@ fn file_for_suggestion(suggestion: &Suggestion) -> &str {
 impl Minimizer {
     pub fn delete_dead_code(&mut self) -> Result<()> {
         let inital_build = self.build.build()?;
-        println!("Before reaper: {}", inital_build);
+        println!("Before reaper: {inital_build}");
 
         inital_build.require_reproduction("Initial")?;
 
@@ -51,7 +51,7 @@ impl Minimizer {
         Ok(())
     }
 
-    fn apply_unused_imports<'a>(
+    fn apply_unused_imports(
         &mut self,
         suggestions: &HashMap<&str, Vec<&Suggestion>>,
     ) -> Result<()> {
@@ -63,9 +63,9 @@ impl Minimizer {
                     continue;
                 };
 
-            let mut changes = &mut Changes::default();
+            let changes = &mut Changes::default();
 
-            let mut change = file.try_change(&mut changes)?;
+            let mut change = file.try_change(changes)?;
 
             let desired_suggestions = suggestions
                 .iter()

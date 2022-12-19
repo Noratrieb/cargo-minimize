@@ -13,7 +13,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use processor::Minimizer;
 
-use crate::{everybody_loops::EverybodyLoops, privatize::Privatize, processor::Processor};
+use crate::{processor::Processor};
 
 #[derive(clap::Parser)]
 #[command(version, about, name = "cargo", bin_name = "cargo")]
@@ -50,7 +50,7 @@ struct EnvVar {
 impl FromStr for EnvVar {
     type Err = &'static str;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut split = s.split("=");
+        let mut split = s.split('=');
         let key = split
             .next()
             .ok_or("env var must have KEY=VALUE format")?
@@ -71,8 +71,8 @@ pub fn minimize() -> Result<()> {
     let mut minimizer = Minimizer::new_glob_dir(&options.path, build);
 
     minimizer.run_passes([
-        Box::new(Privatize::default()) as Box<dyn Processor>,
-        Box::new(EverybodyLoops::default()) as Box<dyn Processor>,
+        Box::<privatize::Privatize>::default() as Box<dyn Processor>,
+        Box::<everybody_loops::EverybodyLoops>::default() as Box<dyn Processor>,
     ])?;
 
     minimizer.delete_dead_code().context("deleting dead code")?;

@@ -76,7 +76,7 @@ impl Minimizer {
         passes: impl IntoIterator<Item = Box<dyn Processor + 'a>>,
     ) -> Result<()> {
         let inital_build = self.build.build()?;
-        println!("Initial build: {}", inital_build);
+        println!("Initial build: {inital_build}");
         inital_build.require_reproduction("Initial")?;
 
         for mut pass in passes {
@@ -106,7 +106,7 @@ impl Minimizer {
             }
 
             if !changes.had_changes() {
-                if !refresh_and_try_again && invalidated_files.len() > 0 {
+                if !refresh_and_try_again && !invalidated_files.is_empty() {
                     // A few files have been invalidated, let's refresh and try these again.
                     pass.refresh_state().context("refreshing state for pass")?;
                     invalidated_files.clear();

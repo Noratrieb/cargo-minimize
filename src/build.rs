@@ -64,7 +64,7 @@ impl Build {
                 let mut cmd = Command::new("cargo");
                 cmd.arg("build");
 
-                for arg in args.into_iter().flatten() {
+                for arg in args.iter().flatten() {
                     cmd.arg(arg);
                 }
 
@@ -129,7 +129,7 @@ impl Build {
                 let mut cmd = Command::new("cargo");
                 cmd.args(["build", "--message-format=json"]);
 
-                for arg in args.into_iter().flatten() {
+                for arg in args.iter().flatten() {
                     cmd.arg(arg);
                 }
 
@@ -138,19 +138,19 @@ impl Build {
                 }
 
                 let cmd_output = cmd.output()?;
-                let output = String::from_utf8(cmd_output.stdout.clone())?;
+                let output = String::from_utf8(cmd_output.stdout)?;
 
                 let messages = serde_json::Deserializer::from_str(&output)
                     .into_iter::<CargoJsonCompileMessage>()
                     .collect::<Result<Vec<_>, _>>()?;
 
-                let diags = messages
+                
+
+                messages
                     .into_iter()
                     .filter(|msg| msg.reason == "compiler-message")
                     .flat_map(|msg| msg.message)
-                    .collect();
-
-                diags
+                    .collect()
             }
             BuildMode::Rustc => {
                 let mut cmd = std::process::Command::new("rustc");

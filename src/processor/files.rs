@@ -28,7 +28,7 @@ impl FileChange<'_, '_> {
 
     pub fn write(&mut self, new: &str) -> Result<()> {
         self.has_written_change = true;
-        fs::write(&self.path, new).with_context(|| format!("writing file {}", self.path.display()))
+        fs::write(self.path, new).with_context(|| format!("writing file {}", self.path.display()))
     }
 
     pub fn rollback(mut self) -> Result<()> {
@@ -48,7 +48,7 @@ impl FileChange<'_, '_> {
 impl Drop for FileChange<'_, '_> {
     fn drop(&mut self) {
         if self.has_written_change {
-            fs::write(&self.path, self.before_content()).ok();
+            fs::write(self.path, self.before_content()).ok();
             if !std::thread::panicking() {
                 panic!("File contains unsaved changes!");
             }

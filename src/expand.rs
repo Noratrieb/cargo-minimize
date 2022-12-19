@@ -117,7 +117,7 @@ impl<'ws, 'cfg> DepExpander<'ws, 'cfg> {
         let name = unit.target.crate_name();
 
         let ast =
-            cargo_expand(unit.target.src_path()).context(format!("expanding crate `{}`", name))?;
+            cargo_expand(unit.target.src_path()).context(format!("expanding crate `{name}`"))?;
 
         let deps = self
             .bcx
@@ -230,10 +230,10 @@ impl VisitMut for MakePubCrateVisitor {
 
 fn clean_items_general(items: &mut Vec<Item>) {
     items.retain(|item| match item {
-        Item::ExternCrate(ItemExternCrate { ident, .. }) if ident.to_string() == "std" => false,
+        Item::ExternCrate(ItemExternCrate { ident, .. }) if *ident == "std" => false,
         Item::Use(ItemUse { attrs, .. }) => attrs
             .get(0)
-            .map(|attr| attr.path.segments[0].ident.to_string() != "prelude_import")
+            .map(|attr| attr.path.segments[0].ident != "prelude_import")
             .unwrap_or(true),
         _ => true,
     })
