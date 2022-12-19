@@ -4,13 +4,12 @@
 use std::{fmt::Debug, str::FromStr};
 
 use anyhow::{Context, Result};
-use quote::quote;
 
-type Entrypoint = unsafe extern "C" fn(*const u8, usize) -> bool;
+type CheckerCFn = unsafe extern "C" fn(*const u8, usize) -> bool;
 
 #[derive(Clone, Copy)]
 pub struct RustFunction {
-    func: Entrypoint,
+    func: CheckerCFn,
 }
 
 impl FromStr for RustFunction {
@@ -24,24 +23,28 @@ impl FromStr for RustFunction {
 fn wrap_func_body(func: &str) -> Result<String> {
     let closure = syn::parse_str::<syn::ExprClosure>(func).context("invalid rust syntax")?;
 
-    let tokenstream = quote! {
+    let syn_file = syn::parse_quote! {
         #[no_mangle]
         pub extern "C" fn cargo_minimize_ffi_function(ptr: *const u8, len: usize) -> bool {
-            match ::std::panic::catch_unwind(|| __cargo_minimize_inner(ptr, len)) {
+            match std::panic::catch_unwind(|| __cargo_minimize_inner(ptr, len)) {
                 Ok(bool) => bool,
-                Err(_) => ::std::process::abort(),
+                Err(_) => std::process::abort(),
             }
         }
 
         fn __cargo_minimize_inner(__ptr: *const u8, __len: usize) -> bool {
-            let __slice = unsafe { ::std::slice::from_raw_parts(__ptr, __len) };
-            let __str = ::std::str::from_utf8(__slice).unwrap();
+            let __slice = unsafe { std::slice::from_raw_parts(__ptr, __len) };
+            let __str = std::str::from_utf8(__slice).unwrap();
 
-            (#closure)(__str)
+            fn ascribe_type<F: FnOnce(&str) -> bool>(f: F, output: &str) -> bool {
+                f(output)
+            }
+
+            ascribe_type((#closure), __str)
         }
     };
 
-    Ok(tokenstream.to_string())
+    Ok(prettyplease::unparse(&syn_file))
 }
 
 impl RustFunction {
@@ -96,7 +99,7 @@ impl RustFunction {
             bail!("didn't find entrypoint symbol");
         }
 
-        let func = unsafe { std::mem::transmute::<*mut _, Entrypoint>(func) };
+        let func = unsafe { std::mem::transmute::<*mut _, CheckerCFn>(func) };
 
         Ok(Self { func })
     }
@@ -112,5 +115,24 @@ impl RustFunction {
 impl Debug for RustFunction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RustFunction").finish_non_exhaustive()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::RustFunction;
+
+    #[test]
+    #[cfg_attr(not(unix), ignore)]
+    fn basic_contains_work() {
+        let code = r#"|output| output.contains("test")"#;
+
+        let function = RustFunction::compile(code).unwrap();
+
+        let input = "this is a test";
+        let not_input = "this is not a tst";
+
+        assert!(function.call(input));
+        assert!(!function.call(not_input));
     }
 }
