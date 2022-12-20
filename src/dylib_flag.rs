@@ -66,7 +66,7 @@ impl RustFunction {
 
         let source_path = file.path().join("source.rs");
 
-        std::fs::write(&source_path, &full_file).context("writing source")?;
+        std::fs::write(&source_path, full_file).context("writing source")?;
 
         let mut rustc = Command::new("rustc");
         rustc.arg(source_path);
