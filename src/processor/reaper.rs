@@ -23,7 +23,7 @@ fn file_for_suggestion(suggestion: &Suggestion) -> &str {
 impl Minimizer {
     pub fn delete_dead_code(&mut self) -> Result<()> {
         let inital_build = self.build.build()?;
-        println!("Before reaper: {inital_build}");
+        info!("Before reaper: {inital_build}");
 
         inital_build.require_reproduction("Initial")?;
 
@@ -80,7 +80,7 @@ impl Minimizer {
 
             let after = self.build.build()?;
 
-            println!("{}: After reaper: {after}", file.path.display());
+            info!("{}: After reaper: {after}", file.path.display());
 
             if after.reproduces_issue() {
                 change.commit();

@@ -4,5 +4,4 @@ fn unused() {
 fn main() {
     other::unused();
 }
-
 mod other;

@@ -92,7 +92,7 @@ impl Build {
         let (is_ice, output) = match &self.inner.mode {
             BuildMode::Cargo { args } => {
                 let mut cmd = Command::new("cargo");
-                cmd.arg("build");
+                cmd.args(["build", "--color=always"]);
 
                 for arg in args.iter().flatten() {
                     cmd.arg(arg);
@@ -107,8 +107,8 @@ impl Build {
                 let output = String::from_utf8(outputs.stderr)?;
 
                 (
-                    outputs.status.code() == Some(101)
-                        || output.contains("internal compiler error"),
+                    // Cargo always exits with 101 when rustc has an error.
+                    output.contains("internal compiler error") || output.contains("' panicked at"),
                     output,
                 )
             }

@@ -83,26 +83,5 @@ pub fn minimize() -> Result<()> {
 
     minimizer.delete_dead_code().context("deleting dead code")?;
 
-    /*
-    let file = expand::expand(&dir).context("during expansion")?;
-
-    //let file = syn::parse_str("extern { pub fn printf(format: *const ::c_char, ...) -> ::c_int; }",).unwrap();
-    let file = prettyplease::unparse(&file);
-
-    println!("// EXPANDED-START\n\n{file}\n\n// EXPANDED-END");
-
-    std::fs::write("expanded.rs", file)?;
-
-    println!("wow, expanded");
-    */
-
-    /*
-    let build = Build::new(cargo_dir);
-
-    if build.build()?.success {
-        bail!("build must initially fail!");
-    }
-    */
-
     Ok(())
 }
