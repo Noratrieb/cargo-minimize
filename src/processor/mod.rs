@@ -6,7 +6,7 @@ pub(crate) use self::files::SourceFile;
 use crate::{build::Build, processor::files::Changes, Options};
 use anyhow::{Context, Result};
 use owo_colors::OwoColorize;
-use std::{borrow::Borrow, collections::HashSet, ffi::OsStr, fmt::Debug};
+use std::{collections::HashSet, ffi::OsStr, fmt::Debug};
 
 pub(crate) use self::checker::PassController;
 
@@ -144,9 +144,12 @@ impl Minimizer {
             match has_made_change {
                 ProcessState::Changed | ProcessState::FileInvalidated => {
                     let result = prettyplease::unparse(&krate);
+
                     change.write(&result)?;
+
                     let after = self.build.build()?;
                     info!("{file_display}: After {}: {after}", pass.name());
+
                     if after.reproduces_issue() {
                         change.commit();
                         checker.reproduces();
@@ -154,6 +157,7 @@ impl Minimizer {
                         change.rollback()?;
                         checker.does_not_reproduce();
                     }
+
                     if has_made_change == ProcessState::FileInvalidated {
                         invalidated_files.insert(file);
                     }
@@ -177,21 +181,6 @@ impl Minimizer {
             }
         }
         Ok(())
-    }
-}
-
-#[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-struct AstPath(Vec<String>);
-
-impl Borrow<[String]> for AstPath {
-    fn borrow(&self) -> &[String] {
-        &self.0
-    }
-}
-
-impl Debug for AstPath {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "AstPath({:?})", self.0)
     }
 }
 

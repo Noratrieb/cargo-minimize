@@ -1,8 +1,21 @@
-use std::{collections::BTreeSet, mem};
+use std::{borrow::Borrow, collections::BTreeSet, fmt::Debug, mem};
 
 use self::worklist::Worklist;
 
-use super::AstPath;
+#[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+struct AstPath(Vec<String>);
+
+impl Borrow<[String]> for AstPath {
+    fn borrow(&self) -> &[String] {
+        &self.0
+    }
+}
+
+impl Debug for AstPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "AstPath({:?})", self.0)
+    }
+}
 
 #[derive(Debug)]
 pub(crate) struct PassController {
@@ -96,7 +109,7 @@ impl PassController {
 
                 self.next_in_worklist();
             }
-            PassControllerState::Success => unreachable!("Processed after success"),
+            PassControllerState::Success { .. } => unreachable!("Processed after success"),
         }
     }
 
@@ -116,11 +129,19 @@ impl PassController {
                 };
             }
             PassControllerState::Bisecting {
-                committed: _,
+                committed,
                 failed,
                 current,
                 worklist,
             } => {
+                debug!(
+                    ?committed,
+                    ?failed,
+                    ?current,
+                    ?worklist,
+                    "Does not reproduce"
+                );
+
                 if current.len() == 1 {
                     // We are at a leaf. This is a failure.
                     // FIXME: We should retry the failed ones until a fixpoint is reached.
@@ -135,7 +156,7 @@ impl PassController {
 
                 self.next_in_worklist()
             }
-            PassControllerState::Success => unreachable!("Processed after success"),
+            PassControllerState::Success { .. } => unreachable!("Processed after success"),
         }
     }
 
@@ -151,7 +172,7 @@ impl PassController {
             PassControllerState::Bisecting { current, .. } => {
                 unreachable!("No change while bisecting, current was empty somehow: {current:?}");
             }
-            PassControllerState::Success => {}
+            PassControllerState::Success { .. } => {}
         }
     }
 
@@ -159,7 +180,7 @@ impl PassController {
         match &mut self.state {
             PassControllerState::InitialCollection { .. } => false,
             PassControllerState::Bisecting { .. } => false,
-            PassControllerState::Success => true,
+            PassControllerState::Success { .. } => true,
         }
     }
 
@@ -170,7 +191,7 @@ impl PassController {
                 true
             }
             PassControllerState::Bisecting { current, .. } => current.contains(path),
-            PassControllerState::Success => {
+            PassControllerState::Success { .. } => {
                 unreachable!("Processed further after success");
             }
         }
