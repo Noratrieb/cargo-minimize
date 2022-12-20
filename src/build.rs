@@ -3,6 +3,7 @@ use rustfix::diagnostics::Diagnostic;
 use serde::Deserialize;
 use std::{
     collections::HashSet,
+    ffi::OsStr,
     fmt::{Debug, Display},
     path::PathBuf,
     process::Command,
@@ -39,6 +40,7 @@ struct BuildInner {
     verify: Verify,
     env: Vec<EnvVar>,
     allow_color: bool,
+    project_dir: Option<PathBuf>,
 }
 
 #[derive(Debug)]
@@ -78,8 +80,17 @@ impl Build {
                 verify,
                 env: options.env.clone(),
                 allow_color: !options.no_color,
+                project_dir: options.project_dir.clone(),
             }),
         }
+    }
+
+    fn cmd(&self, name: impl AsRef<OsStr>) -> Command {
+        let mut cmd = Command::new(name);
+        if let Some(path) = &self.inner.project_dir {
+            cmd.current_dir(path);
+        }
+        cmd
     }
 
     pub fn build(&self) -> Result<BuildResult> {
@@ -96,8 +107,12 @@ impl Build {
 
         let (is_ice, output) = match &inner.mode {
             BuildMode::Cargo { args } => {
-                let mut cmd = Command::new("cargo");
-                cmd.args(["build", "--color=always"]);
+                let mut cmd = self.cmd("cargo");
+                cmd.arg("build");
+
+                if inner.allow_color {
+                    cmd.arg("--color=always");
+                }
 
                 for arg in args.iter().flatten() {
                     cmd.arg(arg);
@@ -118,7 +133,7 @@ impl Build {
                 )
             }
             BuildMode::Script(script_path) => {
-                let mut cmd = Command::new(script_path);
+                let mut cmd = self.cmd(script_path);
 
                 for env in &inner.env {
                     cmd.env(&env.key, &env.value);
@@ -131,9 +146,13 @@ impl Build {
                 (outputs.status.success(), output)
             }
             BuildMode::Rustc => {
-                let mut cmd = Command::new("rustc");
+                let mut cmd = self.cmd("rustc");
                 cmd.args(["--edition", "2021"]);
                 cmd.arg(&inner.input_path);
+
+                if inner.allow_color {
+                    cmd.arg("--color=always");
+                }
 
                 for env in &inner.env {
                     cmd.env(&env.key, &env.value);
@@ -170,7 +189,7 @@ impl Build {
 
         let diags = match &inner.mode {
             BuildMode::Cargo { args } => {
-                let mut cmd = Command::new("cargo");
+                let mut cmd = self.cmd("cargo");
                 cmd.args(["build", "--message-format=json"]);
 
                 for arg in args.iter().flatten() {
@@ -195,7 +214,7 @@ impl Build {
                     .collect()
             }
             BuildMode::Rustc => {
-                let mut cmd = std::process::Command::new("rustc");
+                let mut cmd = self.cmd("rustc");
                 cmd.args(["--edition", "2021", "--error-format=json"]);
                 cmd.arg(&inner.input_path);
 

@@ -13,47 +13,52 @@ mod processor;
 mod expand;
 
 use anyhow::{Context, Result};
-use clap::Parser;
 use dylib_flag::RustFunction;
 use processor::Minimizer;
 
 use crate::processor::Processor;
 
+// Export so that the user doesn't have to add clap themselves.
+pub use clap::Parser;
+
 #[derive(clap::Parser)]
 #[command(version, about, name = "cargo", bin_name = "cargo")]
-enum Cargo {
+pub enum Cargo {
     Minimize(Options),
 }
 
 #[derive(clap::Args, Debug)]
 pub struct Options {
     #[arg(short, long)]
-    script_path: Option<PathBuf>,
+    pub script_path: Option<PathBuf>,
 
     #[arg(long)]
-    cargo_args: Option<String>,
+    pub cargo_args: Option<String>,
 
     #[arg(long)]
-    no_color: bool,
+    pub no_color: bool,
 
     #[arg(long)]
-    rustc: bool,
+    pub rustc: bool,
     #[arg(long)]
-    no_verify: bool,
+    pub no_verify: bool,
     #[arg(long)]
-    verify_fn: Option<RustFunction>,
+    pub verify_fn: Option<RustFunction>,
 
     #[arg(long)]
-    env: Vec<EnvVar>,
+    pub env: Vec<EnvVar>,
+
+    #[arg(long)]
+    pub project_dir: Option<PathBuf>,
 
     #[arg(default_value = "src")]
-    path: PathBuf,
+    pub path: PathBuf,
 }
 
 #[derive(Debug, Clone)]
-struct EnvVar {
-    key: String,
-    value: String,
+pub struct EnvVar {
+    pub key: String,
+    pub value: String,
 }
 
 impl FromStr for EnvVar {
@@ -72,12 +77,10 @@ impl FromStr for EnvVar {
     }
 }
 
-pub fn minimize() -> Result<()> {
-    let Cargo::Minimize(options) = Cargo::parse();
-
+pub fn minimize(options: Options) -> Result<()> {
     let build = build::Build::new(&options);
 
-    let mut minimizer = Minimizer::new_glob_dir(options, build);
+    let mut minimizer = Minimizer::new_glob_dir(options, build)?;
 
     minimizer.run_passes([
         Box::<privatize::Privatize>::default() as Box<dyn Processor>,
@@ -87,4 +90,20 @@ pub fn minimize() -> Result<()> {
     minimizer.delete_dead_code().context("deleting dead code")?;
 
     Ok(())
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            script_path: None,
+            cargo_args: None,
+            no_color: false,
+            rustc: false,
+            no_verify: false,
+            verify_fn: None,
+            env: Vec::new(),
+            project_dir: None,
+            path: PathBuf::from("/the/wrong/path/you/need/to/change/it"),
+        }
+    }
 }

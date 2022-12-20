@@ -4,7 +4,7 @@ mod reaper;
 
 pub(crate) use self::files::SourceFile;
 use crate::{build::Build, processor::files::Changes, Options};
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use owo_colors::OwoColorize;
 use std::{collections::HashSet, ffi::OsStr, fmt::Debug};
 
@@ -49,7 +49,7 @@ pub(crate) struct Minimizer {
 }
 
 impl Minimizer {
-    pub(crate) fn new_glob_dir(options: Options, build: Build) -> Self {
+    pub(crate) fn new_glob_dir(options: Options, build: Build) -> Result<Self> {
         let path = &options.path;
         let walk = walkdir::WalkDir::new(path);
 
@@ -69,13 +69,17 @@ impl Minimizer {
             .inspect(|file| {
                 info!("Collecting file: {}", file.path.display());
             })
-            .collect();
+            .collect::<Vec<_>>();
 
-        Self {
+        if files.is_empty() {
+            bail!("Did not find any files for path {}", path.display());
+        }
+
+        Ok(Self {
             files,
             build,
             options,
-        }
+        })
     }
 
     pub(crate) fn run_passes<'a>(
