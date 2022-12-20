@@ -1,4 +1,4 @@
-use std::process::Command;
+use std::{process::Command, sync::Mutex};
 
 use anyhow::{bail, Result};
 use cargo_minimize::Options;
@@ -8,7 +8,20 @@ fn canonicalize(code: &str) -> Result<String> {
     Ok(prettyplease::unparse(&ast))
 }
 
+static HAS_SUBSCRIBER: Mutex<bool> = Mutex::new(false);
+
+fn init_subscriber() {
+    let mut has_subscriber = HAS_SUBSCRIBER.lock().unwrap();
+    if !*has_subscriber {
+        cargo_minimize::init_recommended_tracing_subscriber();
+        *has_subscriber = true;
+    }
+    drop(has_subscriber);
+}
+
 pub fn run_test(code: &str, minimizes_to: &str, options: impl FnOnce(&mut Options)) -> Result<()> {
+    init_subscriber();
+
     let dir = tempfile::tempdir()?;
 
     let mut cargo = Command::new("cargo");
@@ -48,4 +61,3 @@ pub fn run_test(code: &str, minimizes_to: &str, options: impl FnOnce(&mut Option
 
     Ok(())
 }
-

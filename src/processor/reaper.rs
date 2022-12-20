@@ -32,6 +32,8 @@ impl Minimizer {
             .get_diags()
             .context("getting suggestions from rustc")?;
 
+        debug!(?diags, "Got diagnostics");
+
         let mut suggestions_for_file = HashMap::<_, Vec<_>>::new();
         for suggestion in &suggestions {
             suggestions_for_file
@@ -197,7 +199,8 @@ impl<'a> FindUnusedFunction<'a> {
                     "encountered multiline span in dead_code"
                 );
 
-                if Path::new(&span.file_name) != file.path {
+                // When the project directory is remapped, the path may be absolute or generally have some prefix.
+                if !file.path.ends_with(&span.file_name) {
                     return None;
                 }
 

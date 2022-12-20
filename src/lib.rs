@@ -15,6 +15,8 @@ mod expand;
 use anyhow::{Context, Result};
 use dylib_flag::RustFunction;
 use processor::Minimizer;
+use tracing::Level;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
 
 use crate::processor::Processor;
 
@@ -90,6 +92,21 @@ pub fn minimize(options: Options) -> Result<()> {
     minimizer.delete_dead_code().context("deleting dead code")?;
 
     Ok(())
+}
+
+pub fn init_recommended_tracing_subscriber() {
+    let registry = Registry::default().with(
+        EnvFilter::builder()
+            .with_default_directive(Level::INFO.into())
+            .from_env()
+            .unwrap(),
+    );
+
+    let tree_layer = tracing_tree::HierarchicalLayer::new(2)
+        .with_targets(true)
+        .with_bracketed_fields(true);
+
+    registry.with(tree_layer).init();
 }
 
 impl Default for Options {

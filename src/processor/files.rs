@@ -1,10 +1,11 @@
 use anyhow::{Context, Result};
 use std::{
+    fmt::Debug,
     fs,
     path::{Path, PathBuf},
 };
 
-#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+#[derive(PartialEq, Eq, Clone, Hash)]
 pub(crate) struct SourceFile {
     pub(crate) path: PathBuf,
 }
@@ -75,5 +76,11 @@ impl SourceFile {
 impl Changes {
     pub(crate) fn had_changes(&self) -> bool {
         self.any_change
+    }
+}
+
+impl Debug for SourceFile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        <Path as Debug>::fmt(&self.path, f)
     }
 }

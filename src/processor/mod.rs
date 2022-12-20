@@ -130,6 +130,7 @@ impl Minimizer {
         }
     }
 
+    #[instrument(skip(self, pass, invalidated_files, changes), fields(pass = %pass.name()), level = "debug")]
     fn process_file<'file>(
         &self,
         pass: &mut dyn Processor,

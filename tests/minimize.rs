@@ -22,3 +22,25 @@ fn hello_world_no_verify() -> Result<()> {
         },
     )
 }
+
+#[test]
+fn unused() -> Result<()> {
+    // After everybody_loops, `unused` becomes dead and should be removed.
+    run_test(
+        r##"
+        fn unused() {}
+
+        fn main() {
+            unused();
+        }
+    "##,
+        r##"
+    fn main() {
+        loop {}
+    }
+    "##,
+        |opts| {
+            opts.no_verify = true;
+        },
+    )
+}
