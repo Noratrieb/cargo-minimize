@@ -1,7 +1,10 @@
 fn unused() {
-    this_is_required_to_error_haha();
+    other::unused();
 }
+
 fn main() {
-    loop {}
+    unused();
 }
+
+mod folder;
 mod other;

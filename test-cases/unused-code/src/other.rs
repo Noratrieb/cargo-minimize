@@ -1,3 +1,3 @@
-pub(crate) fn unused() {
-    loop {}
+pub fn unused() {
+    crate::folder::unused();
 }
