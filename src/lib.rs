@@ -31,30 +31,46 @@ pub enum Cargo {
 
 #[derive(clap::Args, Debug)]
 pub struct Options {
-    #[arg(short, long)]
-    pub script_path: Option<PathBuf>,
-
+    /// Additional arguments to pass to cargo, seperated by whitespace.
     #[arg(long)]
     pub cargo_args: Option<String>,
 
+    /// To disable colored output.
     #[arg(long)]
     pub no_color: bool,
 
+    /// This option bypasses cargo and uses rustc directly. Only works when a single file is passed as an argument.
     #[arg(long)]
     pub rustc: bool,
+
+    /// Skips testing whether the regression reproduces and just does the most aggressive minimization. Mostly useful
+    /// for testing an demonstration purposes.
     #[arg(long)]
     pub no_verify: bool,
+
+    /// A Rust closure returning a bool that checks whether a regression reproduces.
+    /// Example: `--verify_fn='|output| output.contains("internal compiler error")'`
     #[arg(long)]
     pub verify_fn: Option<RustFunction>,
 
+    /// Additional environment variables to pass to cargo/rustc.
+    /// Example: `--env NAME=VALUE --env ANOTHER_NAME=VALUE`
     #[arg(long)]
     pub env: Vec<EnvVar>,
 
+    /// The working directory where cargo/rustc are invoked in. By default, this is the current working directory.
     #[arg(long)]
     pub project_dir: Option<PathBuf>,
 
+    /// The directory/file of the code to be minimited.
     #[arg(default_value = "src")]
     pub path: PathBuf,
+
+    /// NOTE: This is currently broken.
+    /// A path to a script that is run to check whether code reproduces. When it exits with code 0, the
+    /// problem reproduces.
+    #[arg(long)]
+    pub script_path: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone)]
