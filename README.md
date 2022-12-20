@@ -28,3 +28,22 @@ Options:
   -h, --help                       Print help information
   ```
   
+
+## What it does
+
+`cargo-minimize` is currently fairly simple. It does several passes over the source code. It treats each file in isolation.
+First, it applies the pass to everything in the file. If that stops the reproduction, it goes down the tree, eventually trying each candidate
+in isolation. It then repeats the pass until no more changes are made by it.
+
+The currently implemented passes are the following:
+- `pub` is replaced by `pub(crate)`. This does not have a real minimization effect on its own.
+- Bodies are replaced by `loop {}`. This greatly cuts down on the amount of things and makes many functions unused
+- Unused imports are removed
+- Unused functions are removed (this relies on the first step, as `pub` items are not marked as `dead_code` by rustc)
+
+Possible improvements:
+- Delete more kinds of unused items
+- Inline small modules
+- Deal with dependencies (there is experimental code in the repo that inlines them)
+- Somehow deal with traits
+- Integrate more fine-grained minimization tools such as `DustMite` or [`perses`](https://github.com/uw-pluverse/perses)
