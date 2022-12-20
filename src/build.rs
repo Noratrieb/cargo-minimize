@@ -38,6 +38,7 @@ struct BuildInner {
     input_path: PathBuf,
     verify: Verify,
     env: Vec<EnvVar>,
+    allow_color: bool,
 }
 
 #[derive(Debug)]
@@ -76,20 +77,24 @@ impl Build {
                 input_path: options.path.clone(),
                 verify,
                 env: options.env.clone(),
+                allow_color: !options.no_color,
             }),
         }
     }
 
     pub fn build(&self) -> Result<BuildResult> {
-        if let Verify::None = self.inner.verify {
+        let inner = &self.inner;
+
+        if let Verify::None = inner.verify {
             return Ok(BuildResult {
                 reproduces_issue: false,
                 no_verify: true,
                 output: String::new(),
+                allow_color: inner.allow_color,
             });
         }
 
-        let (is_ice, output) = match &self.inner.mode {
+        let (is_ice, output) = match &inner.mode {
             BuildMode::Cargo { args } => {
                 let mut cmd = Command::new("cargo");
                 cmd.args(["build", "--color=always"]);
@@ -98,7 +103,7 @@ impl Build {
                     cmd.arg(arg);
                 }
 
-                for env in &self.inner.env {
+                for env in &inner.env {
                     cmd.env(&env.key, &env.value);
                 }
 
@@ -115,7 +120,7 @@ impl Build {
             BuildMode::Script(script_path) => {
                 let mut cmd = Command::new(script_path);
 
-                for env in &self.inner.env {
+                for env in &inner.env {
                     cmd.env(&env.key, &env.value);
                 }
 
@@ -128,9 +133,9 @@ impl Build {
             BuildMode::Rustc => {
                 let mut cmd = Command::new("rustc");
                 cmd.args(["--edition", "2021"]);
-                cmd.arg(&self.inner.input_path);
+                cmd.arg(&inner.input_path);
 
-                for env in &self.inner.env {
+                for env in &inner.env {
                     cmd.env(&env.key, &env.value);
                 }
 
@@ -146,7 +151,7 @@ impl Build {
             }
         };
 
-        let reproduces_issue = match self.inner.verify {
+        let reproduces_issue = match inner.verify {
             Verify::None => unreachable!("handled ealier"),
             Verify::Ice => is_ice,
             Verify::Custom(func) => func.call(&output),
@@ -156,11 +161,14 @@ impl Build {
             reproduces_issue,
             no_verify: false,
             output,
+            allow_color: inner.allow_color,
         })
     }
 
     pub fn get_diags(&self) -> Result<(Vec<Diagnostic>, Vec<rustfix::Suggestion>)> {
-        let diags = match &self.inner.mode {
+        let inner = &self.inner;
+
+        let diags = match &inner.mode {
             BuildMode::Cargo { args } => {
                 let mut cmd = Command::new("cargo");
                 cmd.args(["build", "--message-format=json"]);
@@ -169,7 +177,7 @@ impl Build {
                     cmd.arg(arg);
                 }
 
-                for env in &self.inner.env {
+                for env in &inner.env {
                     cmd.env(&env.key, &env.value);
                 }
 
@@ -189,9 +197,9 @@ impl Build {
             BuildMode::Rustc => {
                 let mut cmd = std::process::Command::new("rustc");
                 cmd.args(["--edition", "2021", "--error-format=json"]);
-                cmd.arg(&self.inner.input_path);
+                cmd.arg(&inner.input_path);
 
-                for env in &self.inner.env {
+                for env in &inner.env {
                     cmd.env(&env.key, &env.value);
                 }
 
@@ -225,6 +233,7 @@ pub struct BuildResult {
     reproduces_issue: bool,
     no_verify: bool,
     output: String,
+    allow_color: bool,
 }
 
 impl BuildResult {
@@ -245,10 +254,19 @@ impl BuildResult {
 
 impl Display for BuildResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match (self.reproduces_issue, self.no_verify) {
-            (true, _) => f.write_str("yes"),
-            (false, true) => f.write_str("yes (no-verify)"),
-            (false, false) => f.write_str("no"),
+        use owo_colors::OwoColorize;
+
+        match self.allow_color {
+            false => match (self.reproduces_issue, self.no_verify) {
+                (true, _) => f.write_str("yes"),
+                (false, true) => f.write_str("yes (no-verify)"),
+                (false, false) => f.write_str("no"),
+            },
+            true => match (self.reproduces_issue, self.no_verify) {
+                (true, _) => write!(f, "{}", "yes".green()),
+                (false, true) => write!(f, "{}", "yes (no-verify)".green()),
+                (false, false) => write!(f, "{}", "no".red()),
+            },
         }
     }
 }

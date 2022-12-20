@@ -34,6 +34,9 @@ pub struct Options {
     cargo_args: Option<String>,
 
     #[arg(long)]
+    no_color: bool,
+
+    #[arg(long)]
     rustc: bool,
     #[arg(long)]
     no_verify: bool,
@@ -74,7 +77,7 @@ pub fn minimize() -> Result<()> {
 
     let build = build::Build::new(&options);
 
-    let mut minimizer = Minimizer::new_glob_dir(&options.path, build);
+    let mut minimizer = Minimizer::new_glob_dir(options, build);
 
     minimizer.run_passes([
         Box::<privatize::Privatize>::default() as Box<dyn Processor>,

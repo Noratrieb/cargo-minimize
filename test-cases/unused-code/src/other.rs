@@ -1,1 +1,3 @@
-pub(crate) fn unused() {}
+pub(crate) fn unused() {
+    loop {}
+}

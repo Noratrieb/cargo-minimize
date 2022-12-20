@@ -1,15 +1,16 @@
 mod files;
 mod reaper;
 pub(crate) use self::files::SourceFile;
-use crate::{build::Build, processor::files::Changes};
+use self::worklist::Worklist;
+use crate::{build::Build, processor::files::Changes, Options};
 use anyhow::{Context, Result};
+use owo_colors::OwoColorize;
 use std::{
     borrow::Borrow,
     collections::{BTreeSet, HashSet},
     ffi::OsStr,
     fmt::Debug,
     mem,
-    path::Path,
 };
 
 pub(crate) trait Processor {
@@ -47,11 +48,14 @@ pub(crate) enum ProcessState {
 pub(crate) struct Minimizer {
     files: Vec<SourceFile>,
     build: Build,
+    options: Options,
 }
 
 impl Minimizer {
-    pub(crate) fn new_glob_dir(path: &Path, build: Build) -> Self {
+    pub(crate) fn new_glob_dir(options: Options, build: Build) -> Self {
+        let path = &options.path;
         let walk = walkdir::WalkDir::new(path);
+
         let files = walk
             .into_iter()
             .filter_map(|entry| match entry {
@@ -70,7 +74,11 @@ impl Minimizer {
             })
             .collect();
 
-        Self { files, build }
+        Self {
+            files,
+            build,
+            options,
+        }
     }
 
     pub(crate) fn run_passes<'a>(
@@ -130,7 +138,6 @@ impl Minimizer {
     ) -> Result<()> {
         let mut checker = PassController::new();
         loop {
-            debug!(?checker);
             let file_display = file.path.display();
             let mut change = file.try_change(changes)?;
             let mut krate = syn::parse_file(change.before_content())
@@ -155,7 +162,15 @@ impl Minimizer {
                     }
                 }
                 ProcessState::NoChange => {
-                    info!("{file_display}: After {}: no changes", pass.name());
+                    if self.options.no_color {
+                        info!("{file_display}: After {}: no changes", pass.name());
+                    } else {
+                        info!(
+                            "{file_display}: After {}: {}",
+                            pass.name(),
+                            "no changes".yellow()
+                        );
+                    }
                     checker.no_change();
                 }
             }
@@ -197,16 +212,51 @@ enum PassControllerState {
         committed: BTreeSet<AstPath>,
         failed: BTreeSet<AstPath>,
         current: BTreeSet<AstPath>,
-        worklist: Vec<Vec<AstPath>>,
+        worklist: Worklist,
     },
     Success,
+}
+
+mod worklist {
+    use super::AstPath;
+
+    /// A worklist that ensures that the inner list is never empty.
+    #[derive(Debug)]
+    pub(super) struct Worklist(Vec<Vec<AstPath>>);
+
+    impl Worklist {
+        pub(super) fn new() -> Self {
+            Self(Vec::new())
+        }
+
+        pub(super) fn push(&mut self, next: Vec<AstPath>) {
+            if !next.is_empty() {
+                self.0.push(next);
+            }
+        }
+
+        pub(super) fn pop(&mut self) -> Option<Vec<AstPath>> {
+            self.0.pop()
+        }
+    }
+}
+
+// copied from `core` because who needs stable features anyways
+pub const fn div_ceil(lhs: usize, rhs: usize) -> usize {
+    let d = lhs / rhs;
+    let r = lhs % rhs;
+    if r > 0 && rhs > 0 {
+        d + 1
+    } else {
+        d
+    }
 }
 
 fn split_owned<T, From: IntoIterator<Item = T>, A: FromIterator<T>, B: FromIterator<T>>(
     vec: From,
 ) -> (A, B) {
     let candidates = vec.into_iter().collect::<Vec<_>>();
-    let half = candidates.len() / 2;
+    let half = div_ceil(candidates.len(), 2);
 
     let mut candidates = candidates.into_iter();
 
@@ -265,21 +315,22 @@ impl PassController {
             PassControllerState::InitialCollection { candidates } => {
                 let (current, first_worklist_item) = split_owned(mem::take(candidates));
 
+                let mut worklist = Worklist::new();
+                worklist.push(first_worklist_item);
+
                 self.state = PassControllerState::Bisecting {
                     committed: BTreeSet::new(),
                     failed: BTreeSet::new(),
                     current,
-                    worklist: vec![first_worklist_item],
+                    worklist,
                 };
             }
             PassControllerState::Bisecting {
-                committed,
+                committed: _,
                 failed,
                 current,
                 worklist,
             } => {
-                debug!(?committed, ?current, ?worklist);
-
                 if current.len() == 1 {
                     // We are at a leaf. This is a failure.
                     // FIXME: We should retry the failed ones until a fixpoint is reached.
