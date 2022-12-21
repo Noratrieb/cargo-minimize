@@ -31,7 +31,7 @@ pub enum Cargo {
 
 #[derive(clap::Args, Debug)]
 pub struct Options {
-    /// Additional arguments to pass to cargo, seperated by whitespace.
+    /// Additional arguments to pass to cargo, separated by whitespace.
     #[arg(long)]
     pub cargo_args: Option<String>,
 
@@ -44,12 +44,12 @@ pub struct Options {
     pub rustc: bool,
 
     /// Skips testing whether the regression reproduces and just does the most aggressive minimization. Mostly useful
-    /// for testing an demonstration purposes.
+    /// for testing and demonstration purposes.
     #[arg(long)]
     pub no_verify: bool,
 
     /// A Rust closure returning a bool that checks whether a regression reproduces.
-    /// Example: `--verify_fn='|output| output.contains("internal compiler error")'`
+    /// Example: `--verify-fn='|output| output.contains("internal compiler error")'`
     #[arg(long)]
     pub verify_fn: Option<RustFunction>,
 
@@ -62,7 +62,7 @@ pub struct Options {
     #[arg(long)]
     pub project_dir: Option<PathBuf>,
 
-    /// The directory/file of the code to be minimited.
+    /// The directory/file of the code to be minimized.
     #[arg(default_value = "src")]
     pub path: PathBuf,
 
