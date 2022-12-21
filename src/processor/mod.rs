@@ -75,6 +75,10 @@ impl Minimizer {
             bail!("Did not find any files for path {}", path.display());
         }
 
+        if options.rustc && files.len() > 1 {
+            bail!("Found more than one file. --rustc only works with a single file.");
+        }
+
         Ok(Self {
             files,
             build,
