@@ -2,6 +2,7 @@ use std::{process::Command, sync::Mutex};
 
 use anyhow::{bail, Result};
 use cargo_minimize::Options;
+use tracing::Level;
 
 fn canonicalize(code: &str) -> Result<String> {
     let ast = syn::parse_file(code)?;
@@ -13,7 +14,7 @@ static HAS_SUBSCRIBER: Mutex<bool> = Mutex::new(false);
 fn init_subscriber() {
     let mut has_subscriber = HAS_SUBSCRIBER.lock().unwrap();
     if !*has_subscriber {
-        cargo_minimize::init_recommended_tracing_subscriber();
+        cargo_minimize::init_recommended_tracing_subscriber(Level::WARN);
         *has_subscriber = true;
     }
     drop(has_subscriber);

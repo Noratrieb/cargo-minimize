@@ -110,10 +110,10 @@ pub fn minimize(options: Options) -> Result<()> {
     Ok(())
 }
 
-pub fn init_recommended_tracing_subscriber() {
+pub fn init_recommended_tracing_subscriber(default_level: Level) {
     let registry = Registry::default().with(
         EnvFilter::builder()
-            .with_default_directive(Level::INFO.into())
+            .with_default_directive(default_level.into())
             .from_env()
             .unwrap(),
     );
