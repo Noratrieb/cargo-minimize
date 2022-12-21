@@ -41,27 +41,46 @@ struct BuildInner {
     env: Vec<EnvVar>,
     allow_color: bool,
     project_dir: Option<PathBuf>,
+    extra_args: Vec<String>,
 }
 
 #[derive(Debug)]
 enum BuildMode {
-    Cargo { args: Option<Vec<String>> },
+    Cargo {
+        /// May be something like `miri run`.
+        subcommand: Vec<String>,
+        diag_subcommand: Vec<String>,
+    },
     Script(PathBuf),
     Rustc,
 }
 
 impl Build {
-    pub fn new(options: &Options) -> Self {
+    pub fn new(options: &Options) -> Result<Self> {
+        if options.rustc && options.cargo_subcmd != "build" {
+            bail!("Cannot specify --rustc together with --cargo-subcmd or --cargo-args");
+        }
+
+        let extra_args = options
+            .extra_args
+            .as_deref()
+            .map(split_args)
+            .unwrap_or_default();
+
         let mode = if options.rustc {
             BuildMode::Rustc
         } else if let Some(script) = &options.script_path {
             BuildMode::Script(script.clone())
         } else {
+            let subcommand = split_args(&options.cargo_subcmd);
+            let diag_subcommand = options
+                .diagnostics_cargo_subcmd
+                .as_deref()
+                .map(split_args)
+                .unwrap_or_else(|| subcommand.clone());
             BuildMode::Cargo {
-                args: options
-                    .cargo_args
-                    .as_ref()
-                    .map(|cmd| cmd.split_whitespace().map(ToString::to_string).collect()),
+                subcommand,
+                diag_subcommand,
             }
         };
 
@@ -73,7 +92,7 @@ impl Build {
             Verify::Ice
         };
 
-        Self {
+        Ok(Self {
             inner: Rc::new(BuildInner {
                 mode,
                 input_path: options.path.clone(),
@@ -81,8 +100,9 @@ impl Build {
                 env: options.env.clone(),
                 allow_color: !options.no_color,
                 project_dir: options.project_dir.clone(),
+                extra_args,
             }),
-        }
+        })
     }
 
     fn cmd(&self, name: impl AsRef<OsStr>) -> Command {
@@ -106,17 +126,19 @@ impl Build {
         }
 
         let (is_ice, output) = match &inner.mode {
-            BuildMode::Cargo { args } => {
+            BuildMode::Cargo {
+                subcommand,
+                diag_subcommand: _,
+            } => {
                 let mut cmd = self.cmd("cargo");
-                cmd.arg("build");
+
+                cmd.args(subcommand);
 
                 if inner.allow_color {
                     cmd.arg("--color=always");
                 }
 
-                for arg in args.iter().flatten() {
-                    cmd.arg(arg);
-                }
+                cmd.args(&inner.extra_args);
 
                 for env in &inner.env {
                     cmd.env(&env.key, &env.value);
@@ -134,6 +156,8 @@ impl Build {
             }
             BuildMode::Script(script_path) => {
                 let mut cmd = self.cmd(script_path);
+
+                cmd.args(&inner.extra_args);
 
                 for env in &inner.env {
                     cmd.env(&env.key, &env.value);
@@ -153,6 +177,8 @@ impl Build {
                 if inner.allow_color {
                     cmd.arg("--color=always");
                 }
+
+                cmd.args(&inner.extra_args);
 
                 for env in &inner.env {
                     cmd.env(&env.key, &env.value);
@@ -188,13 +214,17 @@ impl Build {
         let inner = &self.inner;
 
         let diags = match &inner.mode {
-            BuildMode::Cargo { args } => {
+            BuildMode::Cargo {
+                subcommand: _,
+                diag_subcommand,
+            } => {
                 let mut cmd = self.cmd("cargo");
-                cmd.args(["build", "--message-format=json"]);
 
-                for arg in args.iter().flatten() {
-                    cmd.arg(arg);
-                }
+                cmd.args(diag_subcommand);
+
+                cmd.arg("--message-format=json");
+
+                cmd.args(&inner.extra_args);
 
                 for env in &inner.env {
                     cmd.env(&env.key, &env.value);
@@ -294,4 +324,8 @@ impl Display for BuildResult {
 pub struct CargoJsonCompileMessage {
     pub reason: String,
     pub message: Option<Diagnostic>,
+}
+
+fn split_args(s: &str) -> Vec<String> {
+    s.split_whitespace().map(ToString::to_string).collect()
 }

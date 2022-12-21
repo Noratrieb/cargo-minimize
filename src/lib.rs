@@ -31,9 +31,18 @@ pub enum Cargo {
 
 #[derive(clap::Args, Debug)]
 pub struct Options {
-    /// Additional arguments to pass to cargo, separated by whitespace.
+    /// Additional arguments to pass to cargo/rustc, separated by whitespace.
     #[arg(long)]
-    pub cargo_args: Option<String>,
+    pub extra_args: Option<String>,
+
+    /// The cargo subcommand used to find the reproduction, seperated by whitespace (for example `miri run`).
+    #[arg(long, default_value = "build")]
+    pub cargo_subcmd: String,
+
+    /// The cargo subcommand used to get diagnostics like the dead_code lint from the compiler, seperated by whitespace.
+    /// Defaults to the value of `--cargo-subcmd`.
+    #[arg(long)]
+    pub diagnostics_cargo_subcmd: Option<String>,
 
     /// To disable colored output.
     #[arg(long)]
@@ -96,7 +105,7 @@ impl FromStr for EnvVar {
 }
 
 pub fn minimize(options: Options) -> Result<()> {
-    let build = build::Build::new(&options);
+    let build = build::Build::new(&options)?;
 
     let mut minimizer = Minimizer::new_glob_dir(options, build)?;
 
@@ -129,7 +138,9 @@ impl Default for Options {
     fn default() -> Self {
         Self {
             script_path: None,
-            cargo_args: None,
+            extra_args: None,
+            cargo_subcmd: "build".into(),
+            diagnostics_cargo_subcmd: None,
             no_color: false,
             rustc: false,
             no_verify: false,

@@ -1,10 +1,8 @@
 fn unused() {
-    other::unused();
+    loop {}
 }
-
 fn main() {
-    unused();
+    loop {}
 }
-
 mod folder;
 mod other;

@@ -17,15 +17,28 @@ Arguments:
   [PATH]  The directory/file of the code to be minimized [default: src]
 
 Options:
-      --cargo-args <CARGO_ARGS>    Additional arguments to pass to cargo, separated by whitespace
-      --no-color                   To disable colored output
-      --rustc                      This option bypasses cargo and uses rustc directly. Only works when a single file is passed as an argument
-      --no-verify                  Skips testing whether the regression reproduces and just does the most aggressive minimization. Mostly useful for testing and demonstration purposes
-      --verify-fn <VERIFY_FN>      A Rust closure returning a bool that checks whether a regression reproduces. Example: `--verify-fn='|output| output.contains("internal compiler error")'`
-      --env <ENV>                  Additional environment variables to pass to cargo/rustc. Example: `--env NAME=VALUE --env ANOTHER_NAME=VALUE`
-      --project-dir <PROJECT_DIR>  The working directory where cargo/rustc are invoked in. By default, this is the current working directory
-      --script-path <SCRIPT_PATH>  NOTE: This is currently broken. A path to a script that is run to check whether code reproduces. When it exits with code 0, the problem reproduces
-  -h, --help                       Print help information
+      --extra-args <EXTRA_ARGS>
+          Additional arguments to pass to cargo/rustc, separated by whitespace
+      --cargo-subcmd <CARGO_SUBCMD>
+          The cargo subcommand used to find the reproduction, seperated by whitespace (for example `miri run`) [default: build]
+      --diagnostics-cargo-subcmd <DIAGNOSTICS_CARGO_SUBCMD>
+          The cargo subcommand used to get diagnostics like the dead_code lint from the compiler, seperated by whitespace. Defaults to the value of `--cargo-subcmd`
+      --no-color
+          To disable colored output
+      --rustc
+          This option bypasses cargo and uses rustc directly. Only works when a single file is passed as an argument
+      --no-verify
+          Skips testing whether the regression reproduces and just does the most aggressive minimization. Mostly useful for testing and demonstration purposes
+      --verify-fn <VERIFY_FN>
+          A Rust closure returning a bool that checks whether a regression reproduces. Example: `--verify-fn='|output| output.contains("internal compiler error")'`
+      --env <ENV>
+          Additional environment variables to pass to cargo/rustc. Example: `--env NAME=VALUE --env ANOTHER_NAME=VALUE`
+      --project-dir <PROJECT_DIR>
+          The working directory where cargo/rustc are invoked in. By default, this is the current working directory
+      --script-path <SCRIPT_PATH>
+          NOTE: This is currently broken. A path to a script that is run to check whether code reproduces. When it exits with code 0, the problem reproduces
+  -h, --help
+          Print help information
 ```
 
 ## What it does
