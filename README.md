@@ -1,6 +1,6 @@
 # cargo-minimize
 
-Install with `cargo install --git https://github.com/Nilstrieb/cargo-minimize --  --package cargo-minimiz` and use with `cargo minimize`.
+Install with `cargo install --git https://github.com/Nilstrieb/cargo-minimize cargo-minimize` and use with `cargo minimize`.
 
 ## Idea
 
