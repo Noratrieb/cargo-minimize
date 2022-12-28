@@ -50,7 +50,7 @@ fn wrap_func_body(func: &str) -> Result<String> {
 impl RustFunction {
     #[cfg(not(unix))]
     pub fn compile(body: &str) -> Result<Self> {
-        Err(anyhow::anyhow!("--verify-fn only works on unix"));
+        Err(anyhow::anyhow!("--verify-fn only works on unix"))
     }
 
     #[cfg(unix)]
