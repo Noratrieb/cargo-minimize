@@ -283,6 +283,8 @@ impl Build {
                     cmd.env(&env.key, &env.value);
                 }
 
+                cmd.env("MINIMIZE_LINTS", "1");
+
                 let outputs = cmd
                     .output()
                     .with_context(|| format!("spawning script: `{cmd:?}`"))?;
