@@ -2,6 +2,8 @@
 
 Install with `cargo install --git https://github.com/Nilstrieb/cargo-minimize cargo-minimize` and use with `cargo minimize`.
 
+For more info, see the [cookbook](https://github.com/Nilstrieb/cargo-minimize#cookbook).
+
 ## Idea
 
 When encountering problems like internal compiler errors, it's often desirable to have a minimal reproduction that can be used by the people fixing the issue. Usually, these problems are found in big codebases. Getting from a big codebase to a small (<50 LOC) reproduction is non-trivial and requires a lot of manual work. `cargo-minimize` assists you with doing some minimization steps that can be easily automated for you.
