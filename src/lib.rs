@@ -42,7 +42,7 @@ pub struct Options {
     /// The cargo subcommand used to get diagnostics like the dead_code lint from the compiler, seperated by whitespace.
     /// Defaults to the value of `--cargo-subcmd`.
     #[arg(long)]
-    pub diagnostics_cargo_subcmd: Option<String>,
+    pub cargo_subcmd_lints: Option<String>,
 
     /// To disable colored output.
     #[arg(long)]
@@ -75,11 +75,19 @@ pub struct Options {
     #[arg(default_value = "src")]
     pub path: PathBuf,
 
-    /// NOTE: This is currently broken.
     /// A path to a script that is run to check whether code reproduces. When it exits with code 0, the
-    /// problem reproduces.
+    /// problem reproduces. If `--script-path-lints` isn't set, this script is also run to get lints.
+    /// For lints, the `MINIMIZE_LINTS` environment variable will be set to `1`.
+    /// The first line of the lint stdout or stderr can be `minimize-fmt-rustc` or `minimize-fmt-cargo` to show whether the rustc or wrapper cargo
+    /// lint format and which output stream is used. Defaults to cargo and stdout.
     #[arg(long)]
     pub script_path: Option<PathBuf>,
+
+    /// A path to a script that is run to get lints.
+    /// The first line of stdout or stderr must be `minimize-fmt-rustc` or `minimize-fmt-cargo` to show whether the rustc or wrapper cargo
+    /// lint format and which output stream is used. Defaults to cargo and stdout.
+    #[arg(long)]
+    pub script_path_lints: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone)]
@@ -137,10 +145,9 @@ pub fn init_recommended_tracing_subscriber(default_level: Level) {
 impl Default for Options {
     fn default() -> Self {
         Self {
-            script_path: None,
             extra_args: None,
             cargo_subcmd: "build".into(),
-            diagnostics_cargo_subcmd: None,
+            cargo_subcmd_lints: None,
             no_color: false,
             rustc: false,
             no_verify: false,
@@ -148,6 +155,8 @@ impl Default for Options {
             env: Vec::new(),
             project_dir: None,
             path: PathBuf::from("/the/wrong/path/you/need/to/change/it"),
+            script_path: None,
+            script_path_lints: None,
         }
     }
 }

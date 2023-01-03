@@ -1,5 +1,7 @@
 mod helper;
 
+use std::path::Path;
+
 use anyhow::Result;
 
 use helper::run_test;
@@ -41,6 +43,30 @@ fn unused() -> Result<()> {
     "##,
         |opts| {
             opts.no_verify = true;
+        },
+    )
+}
+
+#[test]
+#[cfg_attr(windows, ignore)]
+fn custom_script_success() -> Result<()> {
+    let script_path = Path::new(file!())
+        .parent()
+        .unwrap()
+        .join("always_success.sh")
+        .canonicalize()?;
+
+    run_test(
+        r##"
+        fn main() {}
+    "##,
+        r##"
+    fn main() {
+        loop {}
+    }
+    "##,
+        |opts| {
+            opts.script_path = Some(script_path);
         },
     )
 }

@@ -36,6 +36,7 @@ impl Debug for Verify {
 #[derive(Debug)]
 struct BuildInner {
     mode: BuildMode,
+    lint_mode: BuildMode,
     input_path: PathBuf,
     verify: Verify,
     env: Vec<EnvVar>,
@@ -49,7 +50,6 @@ enum BuildMode {
     Cargo {
         /// May be something like `miri run`.
         subcommand: Vec<String>,
-        diag_subcommand: Vec<String>,
     },
     Script(PathBuf),
     Rustc,
@@ -73,15 +73,24 @@ impl Build {
             BuildMode::Script(script.clone())
         } else {
             let subcommand = split_args(&options.cargo_subcmd);
-            let diag_subcommand = options
-                .diagnostics_cargo_subcmd
+            BuildMode::Cargo { subcommand }
+        };
+
+        let lint_mode = if options.rustc {
+            BuildMode::Rustc
+        } else if let Some(script) = options
+            .script_path_lints
+            .as_ref()
+            .or(options.script_path.as_ref())
+        {
+            BuildMode::Script(script.clone())
+        } else {
+            let subcommand = options
+                .cargo_subcmd_lints
                 .as_deref()
                 .map(split_args)
-                .unwrap_or_else(|| subcommand.clone());
-            BuildMode::Cargo {
-                subcommand,
-                diag_subcommand,
-            }
+                .unwrap_or_else(|| split_args(&options.cargo_subcmd));
+            BuildMode::Cargo { subcommand }
         };
 
         let verify = if options.no_verify {
@@ -95,6 +104,7 @@ impl Build {
         Ok(Self {
             inner: Rc::new(BuildInner {
                 mode,
+                lint_mode,
                 input_path: options.path.clone(),
                 verify,
                 env: options.env.clone(),
@@ -126,10 +136,7 @@ impl Build {
         }
 
         let (is_ice, output) = match &inner.mode {
-            BuildMode::Cargo {
-                subcommand,
-                diag_subcommand: _,
-            } => {
+            BuildMode::Cargo { subcommand } => {
                 let mut cmd = self.cmd("cargo");
 
                 cmd.args(subcommand);
@@ -153,21 +160,6 @@ impl Build {
                     output.contains("internal compiler error") || output.contains("' panicked at"),
                     output,
                 )
-            }
-            BuildMode::Script(script_path) => {
-                let mut cmd = self.cmd(script_path);
-
-                cmd.args(&inner.extra_args);
-
-                for env in &inner.env {
-                    cmd.env(&env.key, &env.value);
-                }
-
-                let outputs = cmd.output().context("spawning script")?;
-
-                let output = String::from_utf8(outputs.stderr)?;
-
-                (outputs.status.success(), output)
             }
             BuildMode::Rustc => {
                 let mut cmd = self.cmd("rustc");
@@ -194,6 +186,23 @@ impl Build {
                     output,
                 )
             }
+            BuildMode::Script(script_path) => {
+                let mut cmd = self.cmd(script_path);
+
+                cmd.args(&inner.extra_args);
+
+                for env in &inner.env {
+                    cmd.env(&env.key, &env.value);
+                }
+
+                let outputs = cmd
+                    .output()
+                    .with_context(|| format!("spawning script: `{cmd:?}`"))?;
+
+                let output = String::from_utf8(outputs.stderr)?;
+
+                (outputs.status.success(), output)
+            }
         };
 
         let reproduces_issue = match inner.verify {
@@ -213,14 +222,30 @@ impl Build {
     pub fn get_diags(&self) -> Result<(Vec<Diagnostic>, Vec<rustfix::Suggestion>)> {
         let inner = &self.inner;
 
-        let diags = match &inner.mode {
-            BuildMode::Cargo {
-                subcommand: _,
-                diag_subcommand,
-            } => {
+        fn grab_cargo_diags(output: &str) -> Result<Vec<Diagnostic>> {
+            let messages = serde_json::Deserializer::from_str(output)
+                .into_iter::<CargoJsonCompileMessage>()
+                .collect::<Result<Vec<_>, _>>()?;
+
+            Ok(messages
+                .into_iter()
+                .filter(|msg| msg.reason == "compiler-message")
+                .flat_map(|msg| msg.message)
+                .collect())
+        }
+
+        fn grab_rustc_diags(output: &str) -> Result<Vec<Diagnostic>> {
+            serde_json::Deserializer::from_str(&output)
+                .into_iter::<Diagnostic>()
+                .collect::<Result<_, _>>()
+                .map_err(Into::into)
+        }
+
+        let diags = match &inner.lint_mode {
+            BuildMode::Cargo { subcommand } => {
                 let mut cmd = self.cmd("cargo");
 
-                cmd.args(diag_subcommand);
+                cmd.args(subcommand);
 
                 cmd.arg("--message-format=json");
 
@@ -233,15 +258,7 @@ impl Build {
                 let cmd_output = cmd.output()?;
                 let output = String::from_utf8(cmd_output.stdout)?;
 
-                let messages = serde_json::Deserializer::from_str(&output)
-                    .into_iter::<CargoJsonCompileMessage>()
-                    .collect::<Result<Vec<_>, _>>()?;
-
-                messages
-                    .into_iter()
-                    .filter(|msg| msg.reason == "compiler-message")
-                    .flat_map(|msg| msg.message)
-                    .collect()
+                grab_cargo_diags(&output)?
             }
             BuildMode::Rustc => {
                 let mut cmd = self.cmd("rustc");
@@ -255,13 +272,31 @@ impl Build {
                 let output = cmd.output()?.stderr;
                 let output = String::from_utf8(output)?;
 
-                let diags = serde_json::Deserializer::from_str(&output)
-                    .into_iter::<Diagnostic>()
-                    .collect::<Result<_, _>>()?;
-
-                diags
+                grab_rustc_diags(&output)?
             }
-            BuildMode::Script(_) => todo!(),
+            BuildMode::Script(script_path) => {
+                let mut cmd = self.cmd(script_path);
+
+                cmd.args(&inner.extra_args);
+
+                for env in &inner.env {
+                    cmd.env(&env.key, &env.value);
+                }
+
+                let outputs = cmd
+                    .output()
+                    .with_context(|| format!("spawning script: `{cmd:?}`"))?;
+
+                let stderr = String::from_utf8(outputs.stderr)?;
+                let stdout = String::from_utf8(outputs.stdout)?;
+
+                let (output, mode) = read_script_output(&stdout, &stderr);
+
+                match mode {
+                    LintMode::Rustc => grab_rustc_diags(output)?,
+                    LintMode::Cargo => grab_cargo_diags(output)?,
+                }
+            }
         };
 
         let mut suggestions = Vec::new();
@@ -328,4 +363,62 @@ pub struct CargoJsonCompileMessage {
 
 fn split_args(s: &str) -> Vec<String> {
     s.split_whitespace().map(ToString::to_string).collect()
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum LintMode {
+    Rustc,
+    Cargo,
+}
+
+fn read_script_output<'a>(stdout: &'a str, stderr: &'a str) -> (&'a str, LintMode) {
+    let is_marked_output = |output: &str| {
+        let first_line = output.lines().next();
+        match first_line {
+            None => None,
+            Some(line) if line.contains("minimize-fmt-cargo") => Some(LintMode::Cargo),
+            Some(line) if line.contains("minimize-fmt-rustc") => Some(LintMode::Rustc),
+            Some(_) => None,
+        }
+    };
+
+    is_marked_output(stdout)
+        .map(|mode| (stdout, mode))
+        .or(is_marked_output(stderr).map(|mode| (stderr, mode)))
+        .unwrap_or_else(|| (stdout, LintMode::Cargo))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::build::LintMode;
+
+    use super::read_script_output;
+
+    #[test]
+    fn script_output_default() {
+        let (output, mode) = read_script_output("uwu", "owo");
+        assert_eq!(output, "uwu");
+        assert_eq!(mode, LintMode::Cargo);
+    }
+
+    #[test]
+    fn script_output_rustc_stderr() {
+        let (output, mode) = read_script_output("wrong", "minimize-fmt-rustc");
+        assert_eq!(output, "minimize-fmt-rustc");
+        assert_eq!(mode, LintMode::Rustc);
+    }
+
+    #[test]
+    fn script_output_cargo_stderr() {
+        let (output, mode) = read_script_output("wrong", "minimize-fmt-cargo");
+        assert_eq!(output, "minimize-fmt-cargo");
+        assert_eq!(mode, LintMode::Cargo);
+    }
+
+    #[test]
+    fn script_output_rustc_stdout() {
+        let (output, mode) = read_script_output("minimize-fmt-rustc", "wrong");
+        assert_eq!(output, "minimize-fmt-rustc");
+        assert_eq!(mode, LintMode::Rustc);
+    }
 }
