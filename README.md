@@ -21,7 +21,7 @@ Options:
           Additional arguments to pass to cargo/rustc, separated by whitespace
       --cargo-subcmd <CARGO_SUBCMD>
           The cargo subcommand used to find the reproduction, seperated by whitespace (for example `miri run`) [default: build]
-      --diagnostics-cargo-subcmd <DIAGNOSTICS_CARGO_SUBCMD>
+      --cargo-subcmd-lints <CARGO_SUBCMD_LINTS>
           The cargo subcommand used to get diagnostics like the dead_code lint from the compiler, seperated by whitespace. Defaults to the value of `--cargo-subcmd`
       --no-color
           To disable colored output
@@ -36,7 +36,9 @@ Options:
       --project-dir <PROJECT_DIR>
           The working directory where cargo/rustc are invoked in. By default, this is the current working directory
       --script-path <SCRIPT_PATH>
-          NOTE: This is currently broken. A path to a script that is run to check whether code reproduces. When it exits with code 0, the problem reproduces
+          A path to a script that is run to check whether code reproduces. When it exits with code 0, the problem reproduces. If `--script-path-lints` isn't set, this script is also run to get lints. For lints, the `MINIMIZE_LINTS` environment variable will be set to `1`. The first line of the lint stdout or stderr can be `minimize-fmt-rustc` or `minimize-fmt-cargo` to show whether the rustc or wrapper cargo lint format and which output stream is used. Defaults to cargo and stdout
+      --script-path-lints <SCRIPT_PATH_LINTS>
+          A path to a script that is run to get lints. The first line of stdout or stderr must be `minimize-fmt-rustc` or `minimize-fmt-cargo` to show whether the rustc or wrapper cargo lint format and which output stream is used. Defaults to cargo and stdout
   -h, --help
           Print help information
 ```
@@ -59,3 +61,46 @@ Possible improvements:
 - Deal with dependencies (there is experimental code in the repo that inlines them)
 - Somehow deal with traits
 - Integrate more fine-grained minimization tools such as `DustMite` or [`perses`](https://github.com/uw-pluverse/perses)
+
+
+# Cookbook
+
+## Normal project with ICE on `cargo build`
+
+`cargo minimize`
+
+## An environment variable is required
+
+`cargo minimize --env RUSTFLAGS=-Zpolymorphize`
+
+## Operate on a single file
+
+`cargo minimize --rustc file.rs`
+
+## Other cargo subcommand
+
+`cargo minimize --cargo-subcmd clippy --extra-args "-- -Dclippy::needless_mut"`
+
+## Use a full script
+
+`script.sh`
+```sh
+#!/usr/bin/env bash
+
+# output minimize-fmt-cargo to stdout to indicate that cargo lints will be output to stdout
+# this is the default
+echo "minimize-fmt-cargo"
+
+# The script needs to emit the output here for lints
+cargo build --release
+if [ $? = 128 ];
+then
+    echo "The ICE reproduces"
+    exit 0
+else
+    echo "No reproduction"
+    exit 1
+fi
+```
+
+`cargo minimize --script-path ./script.sh`
