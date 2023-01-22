@@ -48,12 +48,12 @@ fn wrap_func_body(func: &str) -> Result<String> {
 }
 
 impl RustFunction {
-    #[cfg(not(unix))]
+    #[cfg(not(target_os = "linux"))]
     pub fn compile(body: &str) -> Result<Self> {
         Err(anyhow::anyhow!("--verify-fn only works on unix"))
     }
 
-    #[cfg(unix)]
+    #[cfg(target_os = "linux")]
     pub fn compile(body: &str) -> Result<Self> {
         use anyhow::bail;
         use std::io;
@@ -123,7 +123,7 @@ mod tests {
     use super::RustFunction;
 
     #[test]
-    #[cfg_attr(not(unix), ignore)]
+    #[cfg_attr(not(target_os = "linux"), ignore)]
     fn basic_contains_work() {
         let code = r#"|output| output.contains("test")"#;
 
