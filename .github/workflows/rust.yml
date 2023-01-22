@@ -22,7 +22,7 @@ jobs:
         include:
           - build: linux-stable
             os: ubuntu-latest
-            rust: dstable
+            rust: stable
           - build: linux-beta
             os: ubuntu-latest
             rust: beta
