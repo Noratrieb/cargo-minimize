@@ -1,5 +1,5 @@
 [workspace]
-members = ["./", "./prettyplease"]
+members = ["./", "./prettyplease-fork"]
 exclude = ["test-cases/*"]
 
 [package]
@@ -14,7 +14,7 @@ description = "A tool for minimizing rustc ICEs"
 anyhow = "1.0.65"
 clap = { version = "4.0.29", features = ["derive"] }
 owo-colors = "3.5.0"
-prettyplease = { path = "./prettyplease", features = ["verbatim"]}
+prettyplease = { path = "./prettyplease-fork", features = ["verbatim"]}
 proc-macro2 = { version = "1.0.48", features = ["span-locations"] }
 quote = "1.0.23"
 rustfix = "0.6.1"
