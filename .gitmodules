@@ -1,0 +1,3 @@
+[submodule "prettyplease"]
+	path = prettyplease
+	url = git@github.com:dtolnay/prettyplease.git
