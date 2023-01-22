@@ -686,13 +686,6 @@ impl Printer {
         self.word("}");
     }
 
-    #[cfg(not(feature = "verbatim"))]
-    fn expr_verbatim(&mut self, expr: &TokenStream) {
-        if !expr.is_empty() {
-            unimplemented!("Expr::Verbatim `{}`", expr);
-        }
-    }
-
     #[cfg(feature = "verbatim")]
     fn expr_verbatim(&mut self, tokens: &TokenStream) {
         use syn::parse::{Parse, ParseStream, Result};
@@ -803,7 +796,7 @@ impl Printer {
 
         let expr: ExprVerbatim = match syn::parse2(tokens.clone()) {
             Ok(expr) => expr,
-            Err(_) => unimplemented!("Expr::Verbatim `{}`", tokens),
+            Err(_) => return self.word(tokens.to_string()),
         };
 
         match expr {

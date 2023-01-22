@@ -191,7 +191,7 @@ impl Printer {
     }
 
     fn pat_verbatim(&mut self, pat: &TokenStream) {
-        unimplemented!("Pat::Verbatim `{}`", pat);
+        self.word(pat.to_string());
     }
 
     fn pat_wild(&mut self, pat: &PatWild) {

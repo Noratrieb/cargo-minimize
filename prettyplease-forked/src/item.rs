@@ -351,14 +351,6 @@ impl Printer {
         self.hardbreak();
     }
 
-    #[cfg(not(feature = "verbatim"))]
-    fn item_verbatim(&mut self, item: &TokenStream) {
-        if !item.is_empty() {
-            unimplemented!("Item::Verbatim `{}`", item);
-        }
-        self.hardbreak();
-    }
-
     #[cfg(feature = "verbatim")]
     fn item_verbatim(&mut self, tokens: &TokenStream) {
         use syn::parse::{Parse, ParseStream, Result};
@@ -387,7 +379,7 @@ impl Printer {
 
         let item: ItemVerbatim = match syn::parse2(tokens.clone()) {
             Ok(item) => item,
-            Err(_) => unimplemented!("Item::Verbatim `{}`", tokens),
+            Err(_) => return self.word(tokens.to_string()),
         };
 
         match item {
@@ -532,14 +524,6 @@ impl Printer {
         self.hardbreak();
     }
 
-    #[cfg(not(feature = "verbatim"))]
-    fn foreign_item_verbatim(&mut self, foreign_item: &TokenStream) {
-        if !foreign_item.is_empty() {
-            unimplemented!("ForeignItem::Verbatim `{}`", foreign_item);
-        }
-        self.hardbreak();
-    }
-
     #[cfg(feature = "verbatim")]
     fn foreign_item_verbatim(&mut self, tokens: &TokenStream) {
         use syn::parse::{Parse, ParseStream, Result};
@@ -556,7 +540,11 @@ impl Printer {
 
         let foreign_item: ForeignItemVerbatim = match syn::parse2(tokens.clone()) {
             Ok(foreign_item) => foreign_item,
-            Err(_) => unimplemented!("ForeignItem::Verbatim `{}`", tokens),
+            Err(_) => {
+                self.word(tokens.to_string());
+                self.hardbreak();
+                return;
+            },
         };
 
         match foreign_item {
@@ -650,9 +638,7 @@ impl Printer {
     }
 
     fn trait_item_verbatim(&mut self, trait_item: &TokenStream) {
-        if !trait_item.is_empty() {
-            unimplemented!("TraitItem::Verbatim `{}`", trait_item);
-        }
+        self.word(trait_item.to_string());
         self.hardbreak();
     }
 
@@ -747,9 +733,7 @@ impl Printer {
     }
 
     fn impl_item_verbatim(&mut self, impl_item: &TokenStream) {
-        if !impl_item.is_empty() {
-            unimplemented!("ImplItem::Verbatim `{}`", impl_item);
-        }
+        self.word(impl_item.to_string());
         self.hardbreak();
     }
 

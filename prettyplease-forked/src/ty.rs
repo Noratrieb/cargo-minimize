@@ -160,15 +160,6 @@ impl Printer {
         self.word(")");
     }
 
-    #[cfg(not(feature = "verbatim"))]
-    fn type_verbatim(&mut self, ty: &TokenStream) {
-        if ty.to_string() == "..." {
-            self.word("...");
-        } else {
-            unimplemented!("Type::Verbatim `{}`", ty);
-        }
-    }
-
     #[cfg(feature = "verbatim")]
     fn type_verbatim(&mut self, tokens: &TokenStream) {
         use syn::parse::{Parse, ParseStream, Result};
@@ -194,7 +185,7 @@ impl Printer {
 
         let ty: TypeVerbatim = match syn::parse2(tokens.clone()) {
             Ok(ty) => ty,
-            Err(_) => unimplemented!("Type::Verbatim `{}`", tokens),
+            Err(_) => return self.word(tokens.to_string()),
         };
 
         match ty {
