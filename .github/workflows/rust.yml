@@ -1,0 +1,48 @@
+name: Rust
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        build:
+          - linux-stable
+          - linux-beta
+          - linux-nightly
+          - windows
+          - macos
+        include:
+          - build: linux-stable
+            os: ubuntu-latest
+            rust: stable
+          - build: linux-beta
+            os: ubuntu-latest
+            rust: beta
+          - build: linux-nightly
+            os: ubuntu-latest
+            rust: nightly
+          - build: windows
+            os: windows-latest
+            rust: stable
+          - build: macos
+            os: macos-latest
+            rust: stable
+    
+    name: Test ${{ matrix.build }}
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: dtolnay/rust-toolchain@${{ matrix.rust }}
+    - name: Run tests
+      run: cargo test --verbose
+    - name: Check formatting
+      run: cargo fmt --check
