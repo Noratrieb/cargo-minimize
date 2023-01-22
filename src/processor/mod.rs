@@ -56,6 +56,15 @@ pub(crate) struct Minimizer {
 }
 
 impl Minimizer {
+    fn pass_disabled(&self, name: &str) -> bool {
+        if let Some(passes) = &self.options.passes {
+            if !passes.split(",").any(|allowed| name == allowed) {
+                return true;
+            }
+        }
+        false
+    }
+
     pub(crate) fn new_glob_dir(options: Options, build: Build) -> Result<Self> {
         let path = &options.path;
         let walk = walkdir::WalkDir::new(path);
@@ -102,6 +111,9 @@ impl Minimizer {
         inital_build.require_reproduction("Initial")?;
 
         for mut pass in passes {
+            if self.pass_disabled(pass.name()) {
+                continue;
+            }
             self.run_pass(&mut *pass)?;
         }
 

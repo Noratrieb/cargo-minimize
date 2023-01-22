@@ -48,6 +48,26 @@ fn unused() -> Result<()> {
 }
 
 #[test]
+fn impls() -> Result<()> {
+    // Delete unused impls
+    run_test(
+        r##"
+        pub trait Uwu {}
+        impl Uwu for () {}
+        impl Uwu for u8 {}
+
+        fn main() {}
+        "##,
+        r##"
+        fn main() {}
+        "##,
+        |opts| {
+            opts.no_verify = true;
+        },
+    )
+}
+
+#[test]
 #[cfg_attr(windows, ignore)]
 fn custom_script_success() -> Result<()> {
     let script_path = Path::new(file!())
@@ -61,9 +81,7 @@ fn custom_script_success() -> Result<()> {
         fn main() {}
     "##,
         r##"
-    fn main() {
-        loop {}
-    }
+    fn main() {}
     "##,
         |opts| {
             opts.script_path = Some(script_path);

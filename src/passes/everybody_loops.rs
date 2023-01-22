@@ -28,6 +28,8 @@ impl VisitMut for Visitor<'_> {
             [syn::Stmt::Expr(syn::Expr::Loop(syn::ExprLoop {
                 body: loop_body, ..
             }))] if loop_body.stmts.is_empty() => {}
+            // Empty bodies are empty already, no need to loopify them.
+            [] => {}
             _ if self.checker.can_process(&self.current_path) => {
                 *block = self.loop_expr.clone();
                 self.process_state = ProcessState::Changed;

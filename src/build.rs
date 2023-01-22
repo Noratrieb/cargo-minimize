@@ -315,6 +315,7 @@ impl Build {
     }
 }
 
+#[derive(Debug)]
 pub struct BuildResult {
     reproduces_issue: bool,
     no_verify: bool,

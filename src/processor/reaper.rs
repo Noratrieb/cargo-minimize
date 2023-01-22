@@ -18,8 +18,14 @@ fn file_for_suggestion(suggestion: &Suggestion) -> &str {
     &suggestion.solutions[0].replacements[0].snippet.file_name
 }
 
+const PASS_NAME: &str = "delete-unused-functions";
+
 impl Minimizer {
     pub fn delete_dead_code(&mut self) -> Result<()> {
+        if self.pass_disabled(PASS_NAME) {
+            return Ok(());
+        }
+
         let inital_build = self.build.build()?;
         info!("Before reaper: {inital_build}");
 
@@ -139,7 +145,7 @@ impl Pass for DeleteUnusedFunctions {
     }
 
     fn name(&self) -> &'static str {
-        "delete-unused-functions"
+        PASS_NAME
     }
 }
 

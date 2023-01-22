@@ -74,6 +74,10 @@ pub struct Options {
     #[arg(default_value = "src")]
     pub path: PathBuf,
 
+    /// A comma-seperated list of passes that should be enabled. By default, all passes are enabled.
+    #[arg(long)]
+    pub passes: Option<String>,
+
     /// A path to a script that is run to check whether code reproduces. When it exits with code 0, the
     /// problem reproduces. If `--script-path-lints` isn't set, this script is also run to get lints.
     /// For lints, the `MINIMIZE_LINTS` environment variable will be set to `1`.
@@ -119,6 +123,7 @@ pub fn minimize(options: Options) -> Result<()> {
     minimizer.run_passes([
         passes::Privatize::default().boxed(),
         passes::EverybodyLoops::default().boxed(),
+        passes::ItemDeleter::default().boxed(),
     ])?;
 
     minimizer.delete_dead_code().context("deleting dead code")?;
@@ -154,6 +159,7 @@ impl Default for Options {
             env: Vec::new(),
             project_dir: None,
             path: PathBuf::from("/the/wrong/path/you/need/to/change/it"),
+            passes: None,
             script_path: None,
             script_path_lints: None,
         }
