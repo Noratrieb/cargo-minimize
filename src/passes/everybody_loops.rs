@@ -1,7 +1,7 @@
 use quote::ToTokens;
 use syn::{parse_quote, visit_mut::VisitMut};
 
-use crate::processor::{tracking, PassController, ProcessState, Pass, SourceFile};
+use crate::processor::{tracking, Pass, PassController, ProcessState, SourceFile};
 
 struct Visitor<'a> {
     current_path: Vec<String>,

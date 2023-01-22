@@ -2,9 +2,7 @@
 
 use crate::build::Build;
 
-use super::{
-    files::Changes, tracking, Minimizer, PassController, ProcessState, Pass, SourceFile,
-};
+use super::{files::Changes, tracking, Minimizer, Pass, PassController, ProcessState, SourceFile};
 use anyhow::{Context, Result};
 use proc_macro2::Span;
 use quote::ToTokens;
