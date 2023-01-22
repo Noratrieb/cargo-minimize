@@ -1,7 +1,7 @@
 use quote::ToTokens;
 use syn::{parse_quote, visit_mut::VisitMut, Visibility};
 
-use crate::processor::{tracking, PassController, ProcessState, Processor, SourceFile};
+use crate::processor::{tracking, PassController, ProcessState, Pass, SourceFile};
 
 struct Visitor<'a> {
     pub_crate: Visibility,
@@ -37,7 +37,7 @@ impl VisitMut for Visitor<'_> {
 #[derive(Default)]
 pub struct Privatize {}
 
-impl Processor for Privatize {
+impl Pass for Privatize {
     fn process_file(
         &mut self,
         krate: &mut syn::File,

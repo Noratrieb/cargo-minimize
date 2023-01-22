@@ -10,7 +10,7 @@ use std::{collections::HashSet, ffi::OsStr, fmt::Debug};
 
 pub(crate) use self::checker::PassController;
 
-pub(crate) trait Processor {
+pub(crate) trait Pass {
     fn refresh_state(&mut self) -> Result<()> {
         Ok(())
     }
@@ -26,9 +26,16 @@ pub(crate) trait Processor {
     ) -> ProcessState;
 
     fn name(&self) -> &'static str;
+
+    fn boxed(self) -> Box<dyn Pass>
+    where
+        Self: Sized + 'static,
+    {
+        Box::new(self)
+    }
 }
 
-impl Debug for dyn Processor {
+impl Debug for dyn Pass {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.name())
     }
@@ -88,7 +95,7 @@ impl Minimizer {
 
     pub(crate) fn run_passes<'a>(
         &self,
-        passes: impl IntoIterator<Item = Box<dyn Processor + 'a>>,
+        passes: impl IntoIterator<Item = Box<dyn Pass + 'a>>,
     ) -> Result<()> {
         let inital_build = self.build.build()?;
         info!("Initial build: {inital_build}");
@@ -101,7 +108,7 @@ impl Minimizer {
         Ok(())
     }
 
-    fn run_pass(&self, pass: &mut dyn Processor) -> Result<()> {
+    fn run_pass(&self, pass: &mut dyn Pass) -> Result<()> {
         let mut invalidated_files = HashSet::new();
         let mut refresh_and_try_again = false;
         loop {
@@ -137,7 +144,7 @@ impl Minimizer {
     #[instrument(skip(self, pass, invalidated_files, changes), fields(pass = %pass.name()), level = "debug")]
     fn process_file<'file>(
         &self,
-        pass: &mut dyn Processor,
+        pass: &mut dyn Pass,
         file: &'file SourceFile,
         invalidated_files: &mut HashSet<&'file SourceFile>,
         changes: &mut Changes,

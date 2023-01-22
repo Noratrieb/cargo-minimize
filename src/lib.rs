@@ -5,8 +5,7 @@ use std::{path::PathBuf, str::FromStr};
 
 mod build;
 mod dylib_flag;
-mod everybody_loops;
-mod privatize;
+mod passes;
 mod processor;
 
 #[cfg(this_pulls_in_cargo_which_is_a_big_dep_i_dont_like_it)]
@@ -18,7 +17,7 @@ use processor::Minimizer;
 use tracing::Level;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
 
-use crate::processor::Processor;
+use crate::processor::Pass;
 
 // Export so that the user doesn't have to add clap themselves.
 pub use clap::Parser;
@@ -118,8 +117,8 @@ pub fn minimize(options: Options) -> Result<()> {
     let mut minimizer = Minimizer::new_glob_dir(options, build)?;
 
     minimizer.run_passes([
-        Box::<privatize::Privatize>::default() as Box<dyn Processor>,
-        Box::<everybody_loops::EverybodyLoops>::default() as Box<dyn Processor>,
+        passes::Privatize::default().boxed(),
+        passes::EverybodyLoops::default().boxed(),
     ])?;
 
     minimizer.delete_dead_code().context("deleting dead code")?;

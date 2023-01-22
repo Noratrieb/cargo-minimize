@@ -3,7 +3,7 @@
 use crate::build::Build;
 
 use super::{
-    files::Changes, tracking, Minimizer, PassController, ProcessState, Processor, SourceFile,
+    files::Changes, tracking, Minimizer, PassController, ProcessState, Pass, SourceFile,
 };
 use anyhow::{Context, Result};
 use proc_macro2::Span;
@@ -46,7 +46,7 @@ impl Minimizer {
         self.apply_unused_imports(&suggestions_for_file)?;
 
         self.run_passes([
-            Box::new(DeleteUnusedFunctions::new(self.build.clone(), diags)) as Box<dyn Processor>,
+            Box::new(DeleteUnusedFunctions::new(self.build.clone(), diags)) as Box<dyn Pass>,
         ])
         .context("deleting unused functions")?;
 
@@ -111,7 +111,7 @@ impl DeleteUnusedFunctions {
     }
 }
 
-impl Processor for DeleteUnusedFunctions {
+impl Pass for DeleteUnusedFunctions {
     fn refresh_state(&mut self) -> Result<()> {
         let (diags, _) = self.build.get_diags().context("getting diagnostics")?;
         self.diags = diags;
