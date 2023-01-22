@@ -22,26 +22,28 @@ jobs:
         include:
           - build: linux-stable
             os: ubuntu-latest
-            rust: dtolnay/rust-toolchain@stable
+            rust: dstable
           - build: linux-beta
             os: ubuntu-latest
-            rust: dtolnay/rust-toolchain@beta
+            rust: beta
           - build: linux-nightly
             os: ubuntu-latest
-            rust: dtolnay/rust-toolchain@nightly
+            rust: nightly
           - build: windows
             os: windows-latest
-            rust: dtolnay/rust-toolchain@stable
+            rust: stable
           - build: macos
             os: macos-latest
-            rust: dtolnay/rust-toolchain@stable
+            rust: stable
     
     name: Test ${{ matrix.build }}
     runs-on: ${{ matrix.os }}
 
     steps:
     - uses: actions/checkout@v3
-    - uses: ${{ matrix.rust }}
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ matrix.rust }}
     - name: Run tests
       run: cargo test --verbose
     - name: Check formatting
