@@ -544,7 +544,7 @@ impl Printer {
                 self.word(tokens.to_string());
                 self.hardbreak();
                 return;
-            },
+            }
         };
 
         match foreign_item {
