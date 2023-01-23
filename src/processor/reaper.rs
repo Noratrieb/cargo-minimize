@@ -310,4 +310,7 @@ impl VisitMut for FindUnusedFunction<'_> {
 
     tracking!(visit_item_fn_mut);
     tracking!(visit_impl_item_method_mut);
+    tracking!(visit_field_mut);
+    tracking!(visit_item_struct_mut);
+    tracking!(visit_item_trait_mut);
 }
