@@ -31,6 +31,18 @@ impl VisitMut for Visitor<'_> {
         }
     }
 
+    fn visit_field_mut(&mut self, field: &mut syn::Field) {
+        self.current_path.push(field.ident.to_string());
+        syn::visit_mut::visit_field_mut(self, method);
+        self.current_path.pop();
+    }
+
+    fn visit_item_struct_mut(&mut self, struct_: &mut syn::ItemStruct) {
+        self.current_path.push(struct_.ident.to_string());
+        syn::visit_mut::visit_item_struct_mut(self, method);
+        self.current_path.pop();
+    }
+
     tracking!();
 }
 

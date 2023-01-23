@@ -218,6 +218,8 @@ macro_rules! tracking {
         tracking!(visit_impl_item_method_mut);
         tracking!(visit_item_impl_mut);
         tracking!(visit_item_mod_mut);
+        tracking!(visit_field_mut);
+        tracking!(visit_item_struct_mut);
     };
     (visit_item_fn_mut) => {
         fn visit_item_fn_mut(&mut self, func: &mut syn::ItemFn) {
@@ -245,6 +247,20 @@ macro_rules! tracking {
         fn visit_item_mod_mut(&mut self, module: &mut syn::ItemMod) {
             self.current_path.push(module.ident.to_string());
             syn::visit_mut::visit_item_mod_mut(self, module);
+            self.current_path.pop();
+        }
+    };
+    (visit_field_mut) => {
+        fn visit_field_mut(&mut self, field: &mut syn::Field) {
+            self.current_path.push(field.ident.to_string());
+            syn::visit_mut::visit_field_mut(self, method);
+            self.current_path.pop();
+        }
+    };
+    (visit_item_struct_mut) => {
+        fn visit_item_struct_mut(&mut self, struct_: &mut syn::ItemStruct) {
+            self.current_path.push(struct_.ident.to_string());
+            syn::visit_mut::visit_item_struct_mut(self, method);
             self.current_path.pop();
         }
     };
