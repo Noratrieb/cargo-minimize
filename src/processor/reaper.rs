@@ -14,8 +14,8 @@ use std::{
 };
 use syn::{visit_mut::VisitMut, ImplItem, Item};
 
-fn file_for_suggestion(suggestion: &Suggestion) -> &str {
-    &suggestion.solutions[0].replacements[0].snippet.file_name
+fn file_for_suggestion(suggestion: &Suggestion) -> &Path {
+    Path::new(&suggestion.solutions[0].replacements[0].snippet.file_name)
 }
 
 const PASS_NAME: &str = "delete-unused-functions";
@@ -59,13 +59,13 @@ impl Minimizer {
 
     fn apply_unused_imports(
         &mut self,
-        suggestions: &HashMap<&str, Vec<&Suggestion>>,
+        suggestions: &HashMap<&Path, Vec<&Suggestion>>,
     ) -> Result<()> {
-        for (file, suggestions) in suggestions {
+        for (sugg_file, suggestions) in suggestions {
             let Some(file) = self
                 .files
                 .iter()
-                .find(|source| source.path == Path::new(file)) else {
+                .find(|source| source.path.ends_with(sugg_file) || sugg_file.ends_with(&source.path)) else {
                     continue;
                 };
 
