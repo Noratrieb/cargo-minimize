@@ -79,6 +79,18 @@ impl Minimizer {
                 }
             })
             .filter(|entry| entry.path().extension() == Some(OsStr::new("rs")))
+            .filter(|entry| {
+                if options
+                    .ignore_file
+                    .iter()
+                    .any(|ignored| entry.path().starts_with(ignored))
+                {
+                    info!("Ignoring file: {}", entry.path().display());
+                    false
+                } else {
+                    true
+                }
+            })
             .map(|entry| SourceFile {
                 path: entry.into_path(),
             })

@@ -91,6 +91,10 @@ pub struct Options {
     /// lint format and which output stream is used. Defaults to cargo and stdout.
     #[arg(long)]
     pub script_path_lints: Option<PathBuf>,
+
+    /// Do not touch the following files.
+    #[arg(long)]
+    pub ignore_file: Vec<PathBuf>
 }
 
 #[derive(Debug, Clone)]
@@ -116,6 +120,12 @@ impl FromStr for EnvVar {
 }
 
 pub fn minimize(options: Options) -> Result<()> {
+    for ignore_file in &options.ignore_file {
+        if !ignore_file.try_exists()? {
+            warn!("Ignored path {} does not exist", ignore_file.display());
+        }
+    }
+
     let build = build::Build::new(&options)?;
 
     let mut minimizer = Minimizer::new_glob_dir(options, build)?;
@@ -162,6 +172,7 @@ impl Default for Options {
             passes: None,
             script_path: None,
             script_path_lints: None,
+            ignore_file: Vec::new(),
         }
     }
 }
