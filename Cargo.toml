@@ -13,6 +13,7 @@ description = "A tool for minimizing rustc ICEs"
 [dependencies]
 anyhow = "1.0.65"
 clap = { version = "4.0.29", features = ["derive"] }
+ctrlc = "3.2.5"
 owo-colors = "3.5.0"
 prettyplease = { path = "./prettyplease-forked", features = ["verbatim"]}
 proc-macro2 = { version = "1.0.48", features = ["span-locations"] }

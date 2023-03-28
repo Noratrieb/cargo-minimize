@@ -6,7 +6,9 @@ pub(crate) use self::files::SourceFile;
 use crate::{build::Build, processor::files::Changes, Options};
 use anyhow::{bail, Context, Result};
 use owo_colors::OwoColorize;
-use std::{collections::HashSet, ffi::OsStr, fmt::Debug};
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
+use std::{collections::HashSet, ffi::OsStr, fmt::Debug, sync::atomic::AtomicBool};
 
 pub(crate) use self::checker::PassController;
 
@@ -53,6 +55,7 @@ pub(crate) struct Minimizer {
     files: Vec<SourceFile>,
     build: Build,
     options: Options,
+    cancel: Arc<AtomicBool>,
 }
 
 impl Minimizer {
@@ -65,7 +68,11 @@ impl Minimizer {
         false
     }
 
-    pub(crate) fn new_glob_dir(options: Options, build: Build) -> Result<Self> {
+    pub(crate) fn new_glob_dir(
+        options: Options,
+        build: Build,
+        cancel: Arc<AtomicBool>,
+    ) -> Result<Self> {
         let path = &options.path;
         let walk = walkdir::WalkDir::new(path);
 
@@ -111,6 +118,7 @@ impl Minimizer {
             files,
             build,
             options,
+            cancel,
         })
     }
 
@@ -214,6 +222,11 @@ impl Minimizer {
                     }
                     checker.no_change();
                 }
+            }
+
+            if self.cancel.load(Ordering::SeqCst) {
+                info!("Exiting early.");
+                std::process::exit(0);
             }
 
             if checker.is_finished() {

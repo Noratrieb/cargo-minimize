@@ -1,7 +1,11 @@
 #[macro_use]
 extern crate tracing;
 
-use std::{path::PathBuf, str::FromStr};
+use std::{
+    path::PathBuf,
+    str::FromStr,
+    sync::{atomic::AtomicBool, Arc},
+};
 
 mod build;
 mod dylib_flag;
@@ -94,7 +98,7 @@ pub struct Options {
 
     /// Do not touch the following files.
     #[arg(long)]
-    pub ignore_file: Vec<PathBuf>
+    pub ignore_file: Vec<PathBuf>,
 }
 
 #[derive(Debug, Clone)]
@@ -119,7 +123,7 @@ impl FromStr for EnvVar {
     }
 }
 
-pub fn minimize(options: Options) -> Result<()> {
+pub fn minimize(options: Options, stop: Arc<AtomicBool>) -> Result<()> {
     for ignore_file in &options.ignore_file {
         if !ignore_file.try_exists()? {
             warn!("Ignored path {} does not exist", ignore_file.display());
@@ -128,7 +132,7 @@ pub fn minimize(options: Options) -> Result<()> {
 
     let build = build::Build::new(&options)?;
 
-    let mut minimizer = Minimizer::new_glob_dir(options, build)?;
+    let mut minimizer = Minimizer::new_glob_dir(options, build, stop)?;
 
     minimizer.run_passes([
         passes::Privatize::default().boxed(),

@@ -1,4 +1,7 @@
-use std::{process::Command, sync::Mutex};
+use std::{
+    process::Command,
+    sync::{atomic::AtomicBool, Mutex, Arc},
+};
 
 use anyhow::{bail, Result};
 use cargo_minimize::Options;
@@ -51,7 +54,7 @@ pub fn run_test(code: &str, minimizes_to: &str, options: impl FnOnce(&mut Option
     opts.path = path;
     options(&mut opts);
 
-    cargo_minimize::minimize(opts)?;
+    cargo_minimize::minimize(opts, Arc::new(AtomicBool::new(false)))?;
 
     let minimized_main_rs = std::fs::read_to_string(main_rs)?;
 
