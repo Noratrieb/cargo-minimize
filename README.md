@@ -45,6 +45,8 @@ Options:
           Print help information
 ```
 
+Note: You can safely press `Ctrl-C` when running cargo-minimize. It will rollback the current minimization attempt and give you the latest known-reproducing state.
+
 ## What it does
 
 `cargo-minimize` is currently fairly simple. It does several passes over the source code. It treats each file in isolation.
