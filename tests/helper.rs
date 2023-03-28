@@ -1,6 +1,6 @@
 use std::{
     process::Command,
-    sync::{atomic::AtomicBool, Mutex, Arc},
+    sync::{atomic::AtomicBool, Arc, Mutex},
 };
 
 use anyhow::{bail, Result};
