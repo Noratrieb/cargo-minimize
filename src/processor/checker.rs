@@ -1,5 +1,7 @@
 use std::{borrow::Borrow, collections::BTreeSet, fmt::Debug, mem};
 
+use crate::Options;
+
 use self::worklist::Worklist;
 
 #[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -20,6 +22,7 @@ impl Debug for AstPath {
 #[derive(Debug)]
 pub(crate) struct PassController {
     state: PassControllerState,
+    pub(crate) options: Options,
 }
 
 #[derive(Debug)]
@@ -86,11 +89,12 @@ fn split_owned<T, From: IntoIterator<Item = T>, A: FromIterator<T>, B: FromItera
 }
 
 impl PassController {
-    pub fn new() -> Self {
+    pub fn new(options: Options) -> Self {
         Self {
             state: PassControllerState::InitialCollection {
                 candidates: Vec::new(),
             },
+            options,
         }
     }
 

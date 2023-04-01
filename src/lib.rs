@@ -1,3 +1,5 @@
+#![feature(non_exhaustive_omitted_patterns_lint)]
+
 #[macro_use]
 extern crate tracing;
 
@@ -32,7 +34,7 @@ pub enum Cargo {
     Minimize(Options),
 }
 
-#[derive(clap::Args, Debug)]
+#[derive(clap::Args, Debug, Clone)]
 pub struct Options {
     /// Additional arguments to pass to cargo/rustc, separated by whitespace.
     #[arg(long)]
@@ -99,6 +101,9 @@ pub struct Options {
     /// Do not touch the following files.
     #[arg(long)]
     pub ignore_file: Vec<PathBuf>,
+
+    #[arg(skip)]
+    pub no_delete_functions: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -177,6 +182,7 @@ impl Default for Options {
             script_path: None,
             script_path_lints: None,
             ignore_file: Vec::new(),
+            no_delete_functions: false,
         }
     }
 }

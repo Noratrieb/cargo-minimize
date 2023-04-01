@@ -52,6 +52,7 @@ pub fn run_test(code: &str, minimizes_to: &str, options: impl FnOnce(&mut Option
 
     opts.project_dir = Some(cargo_dir);
     opts.path = path;
+    opts.no_delete_functions = true;
     options(&mut opts);
 
     cargo_minimize::minimize(opts, Arc::new(AtomicBool::new(false)))?;

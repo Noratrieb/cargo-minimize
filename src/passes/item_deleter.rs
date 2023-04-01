@@ -1,7 +1,7 @@
 use quote::ToTokens;
 use syn::{
-    visit_mut::VisitMut, Item, ItemConst, ItemEnum, ItemMacro, ItemMacro2, ItemMod, ItemStatic,
-    ItemStruct, ItemTrait, ItemType, ItemUnion,
+    visit_mut::VisitMut, Item, ItemConst, ItemEnum, ItemExternCrate, ItemFn, ItemMacro, ItemMacro2,
+    ItemMod, ItemStatic, ItemStruct, ItemTrait, ItemTraitAlias, ItemType, ItemUnion, Signature,
 };
 
 use crate::processor::{tracking, Pass, PassController, ProcessState, SourceFile};
@@ -31,8 +31,6 @@ impl<'a> Visitor<'a> {
 
     fn consider_deleting_item(&mut self, item: &Item) -> bool {
         match item {
-            // N.B. Do not delete ItemFn because that makes testing way harder
-            // and also the dead_lint should cover it all.
             Item::Impl(impl_) => {
                 self.current_path
                     .push(impl_.self_ty.clone().into_token_stream().to_string());
@@ -42,18 +40,25 @@ impl<'a> Visitor<'a> {
                 self.current_path.pop();
                 should_retain
             }
-            Item::Struct(ItemStruct { ident, .. })
+            Item::Fn(_) if self.checker.options.no_delete_functions => true,
+            Item::Fn(ItemFn {
+                sig: Signature { ident, .. },
+                ..
+            })
+            | Item::Struct(ItemStruct { ident, .. })
             | Item::Enum(ItemEnum { ident, .. })
             | Item::Union(ItemUnion { ident, .. })
             | Item::Const(ItemConst { ident, .. })
             | Item::Type(ItemType { ident, .. })
             | Item::Trait(ItemTrait { ident, .. })
+            | Item::TraitAlias(ItemTraitAlias { ident, .. })
             | Item::Macro(ItemMacro {
                 ident: Some(ident), ..
             })
             | Item::Macro2(ItemMacro2 { ident, .. })
             | Item::Static(ItemStatic { ident, .. })
-            | Item::Mod(ItemMod { ident, .. }) => {
+            | Item::Mod(ItemMod { ident, .. })
+            | Item::ExternCrate(ItemExternCrate { ident, .. }) => {
                 self.current_path.push(ident.to_string());
 
                 let should_retain = self.should_retain_item();
@@ -61,6 +66,11 @@ impl<'a> Visitor<'a> {
                 self.current_path.pop();
                 should_retain
             }
+            Item::ForeignMod(_) => true,
+            // We hope for the unused imports to show them all.
+            Item::Use(_) => true,
+            Item::Verbatim(_) => true,
+            #[deny(non_exhaustive_omitted_patterns)]
             _ => true,
         }
     }

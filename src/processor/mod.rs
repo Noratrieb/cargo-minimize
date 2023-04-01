@@ -181,7 +181,7 @@ impl Minimizer {
         invalidated_files: &mut HashSet<&'file SourceFile>,
         changes: &mut Changes,
     ) -> Result<()> {
-        let mut checker = PassController::new();
+        let mut checker = PassController::new(self.options.clone());
         loop {
             let file_display = file.path.display();
             let mut change = file.try_change(changes)?;
