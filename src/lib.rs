@@ -140,6 +140,7 @@ pub fn minimize(options: Options, stop: Arc<AtomicBool>) -> Result<()> {
     minimizer.run_passes([
         passes::Privatize::default().boxed(),
         passes::EverybodyLoops::default().boxed(),
+        passes::FieldDeleter::default().boxed(),
         passes::ItemDeleter::default().boxed(),
     ])?;
 
