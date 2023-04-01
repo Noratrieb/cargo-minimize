@@ -77,7 +77,6 @@ impl<'a> Visitor<'a> {
             // We hope for the unused imports to show them all.
             Item::Use(_) => true,
             Item::Verbatim(_) => true,
-            #[deny(non_exhaustive_omitted_patterns)]
             _ => true,
         }
     }
