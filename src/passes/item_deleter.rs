@@ -32,8 +32,15 @@ impl<'a> Visitor<'a> {
     fn consider_deleting_item(&mut self, item: &Item) -> bool {
         match item {
             Item::Impl(impl_) => {
-                self.current_path
-                    .push(impl_.self_ty.clone().into_token_stream().to_string());
+                self.current_path.push(format!(
+                    "({}) for ({})",
+                    impl_
+                        .trait_
+                        .as_ref()
+                        .map(|(_, tr, _)| tr.into_token_stream().to_string())
+                        .unwrap_or_default(),
+                    impl_.self_ty.clone().into_token_stream()
+                ));
 
                 let should_retain = self.should_retain_item();
 
