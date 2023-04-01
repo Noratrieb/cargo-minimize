@@ -19,23 +19,38 @@ impl Debug for AstPath {
     }
 }
 
+/// `PassController` is the interface between the passes and the core logic.
+/// Its job is to bisect down the minimization sites so that all the ones that can be applied
+/// are applied while trying to apply as many as possible in batches.
 #[derive(Debug)]
 pub(crate) struct PassController {
     state: PassControllerState,
     pub(crate) options: Options,
 }
 
+/// The current state of the bisection.
 #[derive(Debug)]
 enum PassControllerState {
-    InitialCollection {
-        candidates: Vec<AstPath>,
-    },
+    /// Initially, we have a bunch of candidates (minimization sites) that could be applied.
+    /// We collect them in the initial application of the pass where we try to apply all candiates.
+    /// If that works, great! We're done. But often it doesn't and we enter the next stage.
+    InitialCollection { candidates: Vec<AstPath> },
+    /// After applying all candidates fails, we know that we have a few bad candidates.
+    /// Now our job is to apply all the good candidates as efficiently as possible.
     Bisecting {
+        /// These candidates could be applied successfully while still reproducing the issue.
+        /// They are now on disk and will be included in all subsequent runs.
+        /// This is only used for debugging, we could also just throw them away.
         committed: BTreeSet<AstPath>,
+        /// These candidates failed in isolation and are therefore bad.
+        /// This is only used for debugging, we could also just throw them away.
         failed: BTreeSet<AstPath>,
+        /// The set of candidates that we want to apply in this iteration.
         current: BTreeSet<AstPath>,
+        /// The list of `current`s that we want to try in the future.
         worklist: Worklist,
     },
+    /// Bisection is over and all candidates were able to be committed or thrown away.
     Success,
 }
 
@@ -61,31 +76,6 @@ mod worklist {
             self.0.pop()
         }
     }
-}
-
-// copied from `core` because who needs stable features anyways
-pub const fn div_ceil(lhs: usize, rhs: usize) -> usize {
-    let d = lhs / rhs;
-    let r = lhs % rhs;
-    if r > 0 && rhs > 0 {
-        d + 1
-    } else {
-        d
-    }
-}
-
-fn split_owned<T, From: IntoIterator<Item = T>, A: FromIterator<T>, B: FromIterator<T>>(
-    vec: From,
-) -> (A, B) {
-    let candidates = vec.into_iter().collect::<Vec<_>>();
-    let half = div_ceil(candidates.len(), 2);
-
-    let mut candidates = candidates.into_iter();
-
-    let first_half = candidates.by_ref().take(half).collect();
-    let second_half = candidates.collect();
-
-    (first_half, second_half)
 }
 
 impl PassController {
@@ -117,9 +107,11 @@ impl PassController {
         }
     }
 
+    /// The changes did not reproduce the regression. Bisect further.
     pub fn does_not_reproduce(&mut self) {
         match &mut self.state {
             PassControllerState::InitialCollection { candidates } => {
+                // Applying them all was too much, let's bisect!
                 let (current, first_worklist_item) = split_owned(mem::take(candidates));
 
                 let mut worklist = Worklist::new();
@@ -148,7 +140,6 @@ impl PassController {
 
                 if current.len() == 1 {
                     // We are at a leaf. This is a failure.
-                    // FIXME: We should retry the failed ones until a fixpoint is reached.
                     failed.extend(mem::take(current));
                 } else {
                     // Split it further and add it to the worklist.
@@ -164,12 +155,13 @@ impl PassController {
         }
     }
 
+    /// The pass did not apply any changes. We're done.
     pub fn no_change(&mut self) {
         match &self.state {
             PassControllerState::InitialCollection { candidates } => {
                 assert!(
                     candidates.is_empty(),
-                    "No change but received candidates: {candidates:?}"
+                    "No change but received candidates. The responsible pass does not seem to track the ProcessState correctly: {candidates:?}"
                 );
                 self.state = PassControllerState::Success;
             }
@@ -188,9 +180,11 @@ impl PassController {
         }
     }
 
+    /// Checks whether a pass may apply the changes for a minimization site.
     pub fn can_process(&mut self, path: &[String]) -> bool {
         match &mut self.state {
             PassControllerState::InitialCollection { candidates } => {
+                // For the initial collection, we collect the candidate and apply them all.
                 candidates.push(AstPath(path.to_owned()));
                 true
             }
@@ -202,18 +196,45 @@ impl PassController {
     }
 
     fn next_in_worklist(&mut self) {
-        match &mut self.state {
-            PassControllerState::Bisecting {
-                current, worklist, ..
-            } => match worklist.pop() {
-                Some(next) => {
-                    *current = next.into_iter().collect();
-                }
-                None => {
-                    self.state = PassControllerState::Success;
-                }
-            },
-            _ => unreachable!("next_in_worklist called on non-bisecting state"),
+        let PassControllerState::Bisecting {
+            current, worklist, ..
+        } = &mut self.state else {
+            unreachable!("next_in_worklist called on non-bisecting state");
+        };
+        match worklist.pop() {
+            Some(next) => {
+                *current = next.into_iter().collect();
+            }
+            None => {
+                self.state = PassControllerState::Success;
+            }
         }
     }
+}
+
+// copied from `core` because who needs stable features anyways
+// update: still not stabilized because of bikeshedding for div_floor.
+pub const fn div_ceil(lhs: usize, rhs: usize) -> usize {
+    let d = lhs / rhs;
+    let r = lhs % rhs;
+    if r > 0 && rhs > 0 {
+        d + 1
+    } else {
+        d
+    }
+}
+
+/// Splits an owned container in half.
+fn split_owned<T, From: IntoIterator<Item = T>, A: FromIterator<T>, B: FromIterator<T>>(
+    vec: From,
+) -> (A, B) {
+    let candidates = vec.into_iter().collect::<Vec<_>>();
+    let half = div_ceil(candidates.len(), 2);
+
+    let mut candidates = candidates.into_iter();
+
+    let first_half = candidates.by_ref().take(half).collect();
+    let second_half = candidates.collect();
+
+    (first_half, second_half)
 }

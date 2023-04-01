@@ -181,6 +181,11 @@ impl Minimizer {
         invalidated_files: &mut HashSet<&'file SourceFile>,
         changes: &mut Changes,
     ) -> Result<()> {
+        // The core logic of minimization.
+        // Here we process a single file (a unit of work) for a single pass.
+        // For this, we repeatedly try to apply a pass to a subset of a file until we've exhausted all options.
+        // The logic for bisecting down lives in PassController.
+
         let mut checker = PassController::new(self.options.clone());
         loop {
             let file_display = file.path.display();
