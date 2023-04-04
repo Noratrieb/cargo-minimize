@@ -42,14 +42,22 @@ fn full_tests() -> Result<()> {
         .map(|e| e.map_err(Into::into))
         .collect::<Result<Vec<_>>>()?;
 
-    children
-        .into_par_iter()
-        .map(|child| {
+    if std::env::var("PARALLEL").as_deref() != Ok("0") {
+        children
+            .into_par_iter()
+            .map(|child| {
+                let path = child.path();
+
+                build(&path).with_context(|| format!("building {:?}", path.file_name().unwrap()))
+            })
+            .collect::<Result<Vec<_>>>()?;
+    } else {
+        for child in children {
             let path = child.path();
 
-            build(&path).with_context(|| format!("building {:?}", path.file_name().unwrap()))
-        })
-        .collect::<Result<Vec<_>>>()?;
+            build(&path).with_context(|| format!("building {:?}", path.file_name().unwrap()))?;
+        }
+    }
 
     Ok(())
 }
