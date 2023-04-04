@@ -138,8 +138,8 @@ pub fn minimize(options: Options, stop: Arc<AtomicBool>) -> Result<()> {
     let mut minimizer = Minimizer::new_glob_dir(options, build, stop)?;
 
     minimizer.run_passes([
-        passes::Privatize::default().boxed(),
         passes::EverybodyLoops::default().boxed(),
+        passes::Privatize::default().boxed(),
         passes::FieldDeleter::default().boxed(),
         passes::ItemDeleter::default().boxed(),
     ])?;
