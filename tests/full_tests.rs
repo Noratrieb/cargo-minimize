@@ -1,6 +1,8 @@
 use anyhow::{ensure, Context, Result};
 use once_cell::sync::Lazy;
 use regex::Regex;
+use std::collections::hash_map::RandomState;
+use std::collections::HashSet;
 use std::fs::Permissions;
 use std::io::BufWriter;
 use std::os::unix::prelude::PermissionsExt;
@@ -152,6 +154,16 @@ fn build(path: &Path) -> Result<()> {
         required_deleted.is_empty(),
         "Some REQUIRE-DELETED have not been deleted: {required_deleted:?}"
     );
+
+    let end_roots = HashSet::<_, RandomState>::from_iter(
+        get_roots(&proj_dir).context("getting final MINIMIZE-ROOTs")?,
+    );
+    for root in &start_roots {
+        ensure!(
+            end_roots.contains(root),
+            "{root} was not found after minimization"
+        );
+    }
 
     Ok(())
 }
