@@ -135,7 +135,7 @@ impl Build {
             });
         }
 
-        let (is_ice, output) = match &inner.mode {
+        let (is_ice, cmd_status, output) = match &inner.mode {
             BuildMode::Cargo { subcommand } => {
                 let mut cmd = self.cmd("cargo");
 
@@ -158,6 +158,7 @@ impl Build {
                 (
                     // Cargo always exits with 101 when rustc has an error.
                     output.contains("internal compiler error") || output.contains("' panicked at"),
+                    outputs.status,
                     output,
                 )
             }
@@ -183,6 +184,7 @@ impl Build {
                 (
                     outputs.status.code() == Some(101)
                         || output.contains("internal compiler error"),
+                    outputs.status,
                     output,
                 )
             }
@@ -201,14 +203,14 @@ impl Build {
 
                 let output = String::from_utf8(outputs.stderr)?;
 
-                (outputs.status.success(), output)
+                (outputs.status.success(), outputs.status, output)
             }
         };
 
         let reproduces_issue = match inner.verify {
             Verify::None => unreachable!("handled ealier"),
             Verify::Ice => is_ice,
-            Verify::Custom(func) => func.call(&output),
+            Verify::Custom(func) => func.call(&output, cmd_status.code()),
         };
 
         Ok(BuildResult {
