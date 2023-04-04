@@ -117,7 +117,7 @@ if ! cargo check ; then
     exit 1
 fi
 
-OUT=$(rg -o "~MINIMIZE-ROOT [\w\-]*" --no-filename --sort path src)
+OUT=$(grep -ro "~MINIMIZE-ROOT [a-zA-Z_\-]*" --no-filename src)
 
 python3 -c "
 # Get the data from bash by just substituting it in. It works!
