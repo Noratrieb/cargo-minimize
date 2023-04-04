@@ -1,5 +1,6 @@
 use anyhow::{ensure, Context, Result};
 use once_cell::sync::Lazy;
+use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use regex::Regex;
 use std::collections::hash_map::RandomState;
 use std::collections::HashSet;
@@ -37,12 +38,18 @@ fn full_tests() -> Result<()> {
 
     let children = fs::read_dir(path)?;
 
-    for child in children {
-        let child = child?;
-        let path = child.path();
+    let children = children
+        .map(|e| e.map_err(Into::into))
+        .collect::<Result<Vec<_>>>()?;
 
-        build(&path).with_context(|| format!("building {:?}", path.file_name().unwrap()))?;
-    }
+    children
+        .into_par_iter()
+        .map(|child| {
+            let path = child.path();
+
+            build(&path).with_context(|| format!("building {:?}", path.file_name().unwrap()))
+        })
+        .collect::<Result<Vec<_>>>()?;
 
     Ok(())
 }
