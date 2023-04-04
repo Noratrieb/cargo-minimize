@@ -36,5 +36,6 @@ fn main() {
 
     if let Err(err) = cargo_minimize::minimize(options, cancel2) {
         error!("An error occured:\n{err}");
+        std::process::exit(1);
     }
 }
