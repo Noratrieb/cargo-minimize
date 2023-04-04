@@ -48,15 +48,34 @@ fn full_tests() -> Result<()> {
 }
 
 fn setup_dir(path: &Path) -> Result<(TempDir, PathBuf)> {
-    let proj_dir = path.file_name().unwrap().to_str().unwrap();
-
-    writeln!(io::stdout(), ".... Testing {}", proj_dir)?;
-
     let tempdir = tempfile::tempdir()?;
+
+    let proj_name = path.file_name().unwrap().to_str().unwrap();
+    let proj_name = if let Some(proj_name) = proj_name.strip_suffix(".rs") {
+        let out = Command::new("cargo")
+            .arg("new")
+            .arg(proj_name)
+            .current_dir(tempdir.path())
+            .output()
+            .context("spawning cargo new")?;
+
+        ensure!(out.status.success(), "Failed to run cargo new");
+
+        fs::copy(
+            path,
+            tempdir.path().join(proj_name).join("src").join("main.rs"),
+        )
+        .context("copying to main.rs")?;
+        proj_name
+    } else {
+        proj_name
+    };
+
+    writeln!(io::stdout(), ".... Testing {}", proj_name)?;
 
     fs_extra::copy_items(&[path], &tempdir, &fs_extra::dir::CopyOptions::new())?;
 
-    let proj_dir = tempdir.path().join(proj_dir).canonicalize()?;
+    let proj_dir = tempdir.path().join(proj_name).canonicalize()?;
 
     Ok((tempdir, proj_dir))
 }
