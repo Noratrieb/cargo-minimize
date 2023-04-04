@@ -92,15 +92,16 @@ fn setup_scripts(start_roots: &[String], proj_dir: &Path) -> Result<()> {
             .collect::<Vec<_>>()
             .join(", ");
 
+        dbg!(&expected_roots);
+
         write!(
             BufWriter::new(&file),
             r#"#!/usr/bin/env bash
+OUT=$(rg -o "~MINIMIZE-ROOT [\w\-]*" --no-filename --sort path src)
 
-OUT=$(rg -o "~MINIMIZE-ROOT [\w\-]*" full-tests/ --no-filename --sort path src)
-        
 python3 -c "
 # Get the data from bash by just substituting it in. It works!
-out = '$OUT'
+out = '''$OUT'''
         
 lines = out.split('\n')
         
@@ -110,15 +111,15 @@ for line in lines:
     name = line.removeprefix('~MINIMIZE-ROOT').strip()
     found.add(name)
         
-    # Pass in the data _from Rust directly_. Beautiful.
-    expected_roots = {{{expected_roots}}}
-        
-    for root in expected_roots:
-        if root in found:
-            print(f'Found {{root}} in output')
-        else:
-            print(f'Did not find {{root}} in output!')
-            exit(1)
+# Pass in the data _from Rust directly_. Beautiful.
+expected_roots = {{{expected_roots}}}
+
+for root in expected_roots:
+    if root in found:
+        print(f'Found {{root}} in output')
+    else:
+        print(f'Did not find {{root}} in output!')
+        exit(1)
 "
         "#
         )?;
