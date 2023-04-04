@@ -14,6 +14,7 @@ use std::{
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(not(unix), ignore = "FIXME: Make this not cursed.")]
 fn full_tests() -> Result<()> {
     let path = Path::new(file!())
         .canonicalize()?
@@ -68,6 +69,7 @@ fn setup_scripts(start_roots: &[String], proj_dir: &Path) -> Result<()> {
 OUT=$(rg -o "~MINIMIZE-ROOT [\w\-]*" full-tests/ --no-filename --sort path src)
         
 python3 -c "
+# Get the data from bash by just substituting it in. It works!
 out = '$OUT'
         
 lines = out.split('\n')
@@ -78,6 +80,7 @@ for line in lines:
     name = line.removeprefix('~MINIMIZE-ROOT').strip()
     found.add(name)
         
+    # Pass in the data _from Rust directly_. Beautiful.
     expected_roots = {{{expected_roots}}}
         
     for root in expected_roots:
