@@ -6,10 +6,11 @@ use std::sync::{
     Arc,
 };
 
+use anyhow::Result;
 use cargo_minimize::{Cargo, Parser};
 use tracing::{error, Level};
 
-fn main() {
+fn main() -> Result<()> {
     let Cargo::Minimize(options) = Cargo::parse();
 
     cargo_minimize::init_recommended_tracing_subscriber(Level::INFO);
@@ -34,8 +35,5 @@ fn main() {
         error!("Failed to install CTRL-C handler: {err}");
     }
 
-    if let Err(err) = cargo_minimize::minimize(options, cancel2) {
-        error!("An error occured:\n{err}");
-        std::process::exit(1);
-    }
+    cargo_minimize::minimize(options, cancel2)
 }
