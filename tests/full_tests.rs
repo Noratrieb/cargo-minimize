@@ -97,6 +97,11 @@ fn setup_scripts(start_roots: &[String], proj_dir: &Path) -> Result<()> {
         write!(
             BufWriter::new(&file),
             r#"#!/usr/bin/env bash
+if ! cargo check ; then
+    >&2 echo "Cargo check failed"
+    exit 1
+fi
+
 OUT=$(rg -o "~MINIMIZE-ROOT [\w\-]*" --no-filename --sort path src)
 
 python3 -c "
