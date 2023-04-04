@@ -139,12 +139,13 @@ pub fn minimize(options: Options, stop: Arc<AtomicBool>) -> Result<()> {
 
     minimizer.run_passes([
         passes::EverybodyLoops::default().boxed(),
-        passes::Privatize::default().boxed(),
         passes::FieldDeleter::default().boxed(),
-        passes::ItemDeleter::default().boxed(),
+        passes::Privatize::default().boxed(),
     ])?;
 
     minimizer.delete_dead_code().context("deleting dead code")?;
+
+    minimizer.run_passes([passes::ItemDeleter::default().boxed()])?;
 
     Ok(())
 }
