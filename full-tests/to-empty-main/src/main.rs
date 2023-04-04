@@ -1,7 +1,7 @@
-use std::collecions::HashMap;
+use std::collections::HashMap;
 
-/// ~REQUIRE-DELETED
-fn user(map: HashMap<(), ()>) {
+/// ~REQUIRE-DELETED user-fn
+fn user(mut map: HashMap<(), ()>) {
     map.insert((), ());
 }
 

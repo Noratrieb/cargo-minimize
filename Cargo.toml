@@ -33,3 +33,5 @@ libc = "0.2.138"
 
 [dev-dependencies]
 fs_extra = "1.3.0"
+once_cell = "1.17.1"
+regex = "1.7.3"
