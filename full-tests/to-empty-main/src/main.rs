@@ -9,4 +9,5 @@ fn user(mut map: HashMap<(), ()>) {
 fn main() {
     let map = HashMap::new();
     user(map);
+    "~REQUIRE-DELETED main-body";
 }

@@ -16,6 +16,15 @@ use tempfile::TempDir;
 #[test]
 #[cfg_attr(not(unix), ignore = "FIXME: Make this not cursed.")]
 fn full_tests() -> Result<()> {
+    let exit = Command::new("cargo")
+        .arg("build")
+        .spawn()
+        .context("spawn: cargo build")?
+        .wait()
+        .context("wait: cargo build")?;
+
+    ensure!(exit.success(), "cargo build failed");
+
     let path = Path::new(file!())
         .canonicalize()?
         .parent()
