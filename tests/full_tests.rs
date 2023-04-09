@@ -6,6 +6,7 @@ use std::collections::hash_map::RandomState;
 use std::collections::HashSet;
 use std::fs::Permissions;
 use std::io::BufWriter;
+#[cfg(unix)]
 use std::os::unix::prelude::PermissionsExt;
 use std::path::PathBuf;
 use std::process::Command;
@@ -163,6 +164,7 @@ cargo check
         "#
         )?;
 
+        #[cfg(unix)]
         file.set_permissions(Permissions::from_mode(0o777))?;
     }
     Ok(())
