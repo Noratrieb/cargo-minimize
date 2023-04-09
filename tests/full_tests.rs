@@ -17,7 +17,14 @@ use std::{
 use tempfile::TempDir;
 
 #[test]
-#[cfg_attr(not(unix), ignore = "FIXME: Make this not cursed.")]
+#[ignore = "FIXME: Make this not cursed."]
+#[cfg(not(unix))]
+fn full_tests() -> Result<()> {
+    todo!()
+}
+
+#[test]
+#[cfg(unix)]
 fn full_tests() -> Result<()> {
     let exit = Command::new("cargo")
         .arg("build")
