@@ -1,0 +1,2 @@
+[alias]
+runtest = "run -p testsuite --bin runtest"

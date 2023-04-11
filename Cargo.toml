@@ -1,5 +1,5 @@
 [workspace]
-members = ["./", "./prettyplease-forked"]
+members = ["./", "./prettyplease-forked", "./testsuite"]
 exclude = ["test-cases/*", "full-tests/*"]
 
 [package]
@@ -30,9 +30,3 @@ walkdir = "2.3.2"
 
 [target."cfg(unix)".dependencies]
 libc = "0.2.138"
-
-[dev-dependencies]
-fs_extra = "1.3.0"
-once_cell = "1.17.1"
-rayon = "1.7.0"
-regex = "1.7.3"
