@@ -5,10 +5,6 @@ use regex::Regex;
 use std::collections::hash_map::RandomState;
 use std::collections::HashSet;
 use std::ffi::OsString;
-use std::fs::Permissions;
-use std::io::BufWriter;
-#[cfg(unix)]
-use std::os::unix::prelude::PermissionsExt;
 use std::path::PathBuf;
 use std::process::Command;
 use std::{
@@ -48,12 +44,6 @@ fn run_build(command: &mut Command) -> Result<()> {
     Ok(())
 }
 
-#[cfg(not(unix))]
-pub fn full_tests() -> Result<()> {
-    todo!("FIXME: Make this not cursed.")
-}
-
-#[cfg(unix)]
 pub fn full_tests() -> Result<()> {
     run_build(Command::new("cargo").args([
         "build",
@@ -153,71 +143,6 @@ fn setup_dir(path: &Path) -> Result<(TempDir, PathBuf)> {
     Ok((tempdir, proj_dir))
 }
 
-fn setup_scripts(start_roots: &[String], proj_dir: &Path) -> Result<()> {
-    // FIXME: Do this in a good way.
-    // What the fuck is this.
-    {
-        let file = fs::File::create(proj_dir.join("check.sh"))?;
-
-        let expected_roots = start_roots
-            .iter()
-            .map(|root| format!("'{}'", root))
-            .collect::<Vec<_>>()
-            .join(", ");
-
-        write!(
-            BufWriter::new(&file),
-            r#"#!/usr/bin/env bash
-if ! cargo check ; then
-    >&2 echo "Cargo check failed"
-    exit 1
-fi
-
-OUT=$(grep -ro "~MINIMIZE-ROOT [a-zA-Z_\-]*" --no-filename src)
-
-python3 -c "
-# Get the data from bash by just substituting it in. It works!
-out = '''$OUT'''
-        
-lines = out.split('\n')
-        
-found = set()
-        
-for line in lines:
-    name = line.removeprefix('~MINIMIZE-ROOT').strip()
-    found.add(name)
-        
-# Pass in the data _from Rust directly_. Beautiful.
-expected_roots = {{{expected_roots}}}
-
-for root in expected_roots:
-    if root in found:
-        print(f'Found {{root}} in output')
-    else:
-        print(f'Did not find {{root}} in output!')
-        exit(1)
-"
-        "#
-        )?;
-
-        file.set_permissions(Permissions::from_mode(0o777))?;
-    }
-    {
-        let file = fs::File::create(proj_dir.join("lint.sh"))?;
-
-        write!(
-            BufWriter::new(&file),
-            r#"#!/usr/bin/env bash
-cargo check
-        "#
-        )?;
-
-        #[cfg(unix)]
-        file.set_permissions(Permissions::from_mode(0o777))?;
-    }
-    Ok(())
-}
-
 fn build(path: &Path, regression_checker_path: &Path) -> Result<()> {
     let (_tempdir, proj_dir) = setup_dir(path).context("setting up tempdir")?;
     let mut cargo_minimize_path = PathBuf::from("target/debug/cargo-minimize");
@@ -229,8 +154,6 @@ fn build(path: &Path, regression_checker_path: &Path) -> Result<()> {
         .context("canonicalizing target/debug/cargo-minimize")?;
 
     let start_roots = get_roots(&proj_dir).context("getting initial MINIMIZE-ROOTs")?;
-
-    setup_scripts(&start_roots, &proj_dir).context("setting up scripts")?;
 
     let mut cmd = Command::new(cargo_minimize);
     cmd.current_dir(&proj_dir);
