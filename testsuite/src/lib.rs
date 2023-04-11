@@ -208,7 +208,11 @@ cargo check
 
 fn build(path: &Path) -> Result<()> {
     let (_tempdir, proj_dir) = setup_dir(path).context("setting up tempdir")?;
-    let cargo_minimize = Path::new("target/debug/cargo-minimize")
+    let mut cargo_minimize_path = PathBuf::from("target/debug/cargo-minimize");
+    if cfg!(windows) {
+        cargo_minimize_path.set_extension("exe");
+    }
+    let cargo_minimize = cargo_minimize_path
         .canonicalize()
         .context("canonicalizing target/debug/cargo-minimize")?;
 
