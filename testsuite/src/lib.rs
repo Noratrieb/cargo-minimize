@@ -17,6 +17,43 @@ use std::{
 };
 use tempfile::TempDir;
 
+/// This is called by the regression_checked binary during minimization and by the test runner at the end.
+pub fn ensure_correct_minimization(
+    proj_dir: &Path,
+    start_roots: impl IntoIterator<Item = impl AsRef<str>>,
+) -> Result<()> {
+    let required_deleted = get_required_deleted(&proj_dir).context("get REQUIRED-DELETED")?;
+
+    ensure!(
+        required_deleted.is_empty(),
+        "Some REQUIRE-DELETED have not been deleted: {required_deleted:?}"
+    );
+
+    let end_roots = HashSet::<_, RandomState>::from_iter(
+        get_roots(proj_dir).context("getting final MINIMIZE-ROOTs")?,
+    );
+    for root in start_roots {
+        let root = root.as_ref();
+        ensure!(
+            end_roots.contains(root),
+            "{root} was not found after minimization"
+        );
+    }
+
+    Ok(())
+}
+
+fn run_build(command: &mut Command) -> Result<()> {
+    let exit = command
+        .spawn()
+        .context("failed to spawn command")?
+        .wait()
+        .context("failed to wait for command")?;
+
+    ensure!(exit.success(), "command failed");
+    Ok(())
+}
+
 #[cfg(not(unix))]
 pub fn full_tests() -> Result<()> {
     todo!("FIXME: Make this not cursed.")
@@ -24,14 +61,16 @@ pub fn full_tests() -> Result<()> {
 
 #[cfg(unix)]
 pub fn full_tests() -> Result<()> {
-    let exit = Command::new("cargo")
-        .arg("build")
-        .spawn()
-        .context("spawn: cargo build")?
-        .wait()
-        .context("wait: cargo build")?;
-
-    ensure!(exit.success(), "cargo build failed");
+    run_build(Command::new("cargo").args([
+        "build",
+        "-p",
+        "cargo-minimize",
+        "-p",
+        "testsuite",
+        "--bin",
+        "regression_checker",
+    ]))
+    .context("running cargo build")?;
 
     let path = Path::new(file!())
         .canonicalize()?
@@ -193,22 +232,7 @@ fn build(path: &Path) -> Result<()> {
         "Command failed:\n--- stderr:\n{stderr}\n--- stdout:\n{stdout}"
     );
 
-    let required_deleted = get_required_deleted(&proj_dir).context("get REQUIRED-DELETED")?;
-
-    ensure!(
-        required_deleted.is_empty(),
-        "Some REQUIRE-DELETED have not been deleted: {required_deleted:?}"
-    );
-
-    let end_roots = HashSet::<_, RandomState>::from_iter(
-        get_roots(&proj_dir).context("getting final MINIMIZE-ROOTs")?,
-    );
-    for root in &start_roots {
-        ensure!(
-            end_roots.contains(root),
-            "{root} was not found after minimization"
-        );
-    }
+    ensure_correct_minimization(&proj_dir, &start_roots)?;
 
     Ok(())
 }
