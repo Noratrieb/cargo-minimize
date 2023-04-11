@@ -114,8 +114,6 @@ fn setup_scripts(start_roots: &[String], proj_dir: &Path) -> Result<()> {
             .collect::<Vec<_>>()
             .join(", ");
 
-        dbg!(&expected_roots);
-
         write!(
             BufWriter::new(&file),
             r#"#!/usr/bin/env bash
@@ -176,7 +174,6 @@ fn build(path: &Path) -> Result<()> {
         .context("canonicalizing target/debug/cargo-minimize")?;
 
     let start_roots = get_roots(&proj_dir).context("getting initial MINIMIZE-ROOTs")?;
-    eprintln!("Roots: {:?}", start_roots);
 
     setup_scripts(&start_roots, &proj_dir).context("setting up scripts")?;
 
