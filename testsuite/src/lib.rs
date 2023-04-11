@@ -63,6 +63,8 @@ pub fn full_tests() -> Result<()> {
         "testsuite",
         "--bin",
         "regression_checker",
+        "--bin",
+        "cargo-minimize",
     ]))
     .context("running cargo build")?;
 
