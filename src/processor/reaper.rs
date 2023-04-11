@@ -76,7 +76,7 @@ impl Minimizer {
             let desired_suggestions = suggestions
                 .iter()
                 .filter(|sugg| sugg.message.contains("unused import"))
-                .cloned()
+                .copied()
                 .cloned()
                 .collect::<Vec<_>>();
 
@@ -300,7 +300,7 @@ impl VisitMut for FindUnusedFunction<'_> {
                     should_retain
                 }
                 _ => true,
-            })
+            });
         }
 
         syn::visit_mut::visit_item_mod_mut(self, module);

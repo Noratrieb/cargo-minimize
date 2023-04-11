@@ -224,6 +224,13 @@ impl Build {
     }
 
     pub fn get_diags(&self) -> Result<(Vec<Diagnostic>, Vec<rustfix::Suggestion>)> {
+        fn grab_rustc_diags(output: &str) -> Result<Vec<Diagnostic>> {
+            serde_json::Deserializer::from_str(output)
+                .into_iter::<Diagnostic>()
+                .collect::<Result<_, _>>()
+                .map_err(Into::into)
+        }
+
         let inner = &self.inner;
 
         fn grab_cargo_diags(output: &str) -> Result<Vec<Diagnostic>> {
@@ -234,15 +241,8 @@ impl Build {
             Ok(messages
                 .into_iter()
                 .filter(|msg| msg.reason == "compiler-message")
-                .flat_map(|msg| msg.message)
+                .filter_map(|msg| msg.message)
                 .collect())
-        }
-
-        fn grab_rustc_diags(output: &str) -> Result<Vec<Diagnostic>> {
-            serde_json::Deserializer::from_str(&output)
-                .into_iter::<Diagnostic>()
-                .collect::<Result<_, _>>()
-                .map_err(Into::into)
         }
 
         let diags = match &inner.lint_mode {
@@ -392,7 +392,7 @@ fn read_script_output<'a>(stdout: &'a str, stderr: &'a str) -> (&'a str, LintMod
     is_marked_output(stdout)
         .map(|mode| (stdout, mode))
         .or(is_marked_output(stderr).map(|mode| (stderr, mode)))
-        .unwrap_or_else(|| (stdout, LintMode::Cargo))
+        .unwrap_or((stdout, LintMode::Cargo))
 }
 
 #[cfg(test)]
