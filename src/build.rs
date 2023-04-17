@@ -202,8 +202,6 @@ impl Build {
                     .with_context(|| format!("spawning script: `{cmd:?}`"))?;
 
                 let output = String::from_utf8(outputs.stderr)?;
-                let outputstdout = String::from_utf8(outputs.stdout)?;
-                println!("{outputstdout}");
 
                 (outputs.status.success(), outputs.status, output)
             }
