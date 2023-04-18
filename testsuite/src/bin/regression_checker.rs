@@ -1,3 +1,5 @@
+use anyhow::bail;
+
 fn main() -> anyhow::Result<()> {
     if std::env::var("MINIMIZE_LINTS").as_deref() == Ok("1") {
         std::process::Command::new("cargo")
@@ -14,5 +16,17 @@ fn main() -> anyhow::Result<()> {
 
     let proj_dir = std::env::current_dir().expect("current dir not found");
 
-    testsuite::ensure_roots_kept(&proj_dir, roots)
+    testsuite::ensure_roots_kept(&proj_dir, roots)?;
+
+    let check = std::process::Command::new("cargo")
+        .arg("check")
+        .spawn()
+        .unwrap()
+        .wait()
+        .unwrap();
+
+    if !check.success() {
+        bail!("cargo check failed");
+    }
+    Ok(())
 }
