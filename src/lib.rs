@@ -9,6 +9,7 @@ use std::{
 
 mod build;
 mod dylib_flag;
+mod formatting;
 mod passes;
 mod processor;
 

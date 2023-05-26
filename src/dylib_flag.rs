@@ -79,7 +79,7 @@ fn wrap_func_body(func: &str) -> Result<String> {
         }
     };
 
-    Ok(prettyplease::unparse(&syn_file))
+    crate::formatting::format(syn_file)
 }
 
 impl RustFunction {
