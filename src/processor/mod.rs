@@ -196,7 +196,7 @@ impl Minimizer {
 
             match has_made_change {
                 ProcessState::Changed | ProcessState::FileInvalidated => {
-                    let result = prettyplease::unparse(&krate);
+                    let result = crate::formatting::format(krate)?;
 
                     change.write(&result)?;
 
