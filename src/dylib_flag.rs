@@ -96,17 +96,9 @@ impl RustFunction {
 
         std::fs::write(&source_path, full_file).context("writing source")?;
 
-        let library_path = file.path().join("libhelper");
-
         let mut rustc = Command::new("rustc");
         rustc.arg(source_path);
-        rustc.args([
-            "--crate-type=cdylib",
-            "--crate-name=helper",
-            "--emit=link",
-            "-o",
-        ]);
-        rustc.arg(&library_path);
+        rustc.args(["--crate-type=cdylib", "--crate-name=helper", "--emit=link"]);
         rustc.current_dir(file.path());
 
         let output = rustc.output().context("running rustc")?;
@@ -117,7 +109,8 @@ impl RustFunction {
 
         // SAFETY: We are loading a simple rust cdylib, which does not do weird things. But we cannot unload Rust dylibs, so we use MD below.
         let dylib = unsafe {
-            libloading::Library::new(&library_path).context("loading helper shared library")?
+            libloading::Library::new(file.path().join(libloading::library_filename("helper")))
+                .context("loading helper shared library")?
         };
         let dylib = ManuallyDrop::new(dylib);
 
