@@ -1,4 +1,4 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, ensure, Context, Result};
 use rustfix::diagnostics::Diagnostic;
 use serde::Deserialize;
 use std::{
@@ -48,11 +48,12 @@ struct BuildInner {
 #[derive(Debug)]
 enum BuildMode {
     Cargo {
+        cargo_path: PathBuf,
         /// May be something like `miri run`.
         subcommand: Vec<String>,
     },
     Script(PathBuf),
-    Rustc,
+    Rustc(PathBuf),
 }
 
 impl Build {
@@ -68,16 +69,22 @@ impl Build {
             .unwrap_or_default();
 
         let mode = if options.rustc {
-            BuildMode::Rustc
+            let rustc = rustup_which("rustc")?;
+            BuildMode::Rustc(rustc)
         } else if let Some(script) = &options.script_path {
             BuildMode::Script(script.clone())
         } else {
             let subcommand = split_args(&options.cargo_subcmd);
-            BuildMode::Cargo { subcommand }
+            let cargo_path = rustup_which("cargo")?;
+            BuildMode::Cargo {
+                cargo_path,
+                subcommand,
+            }
         };
 
         let lint_mode = if options.rustc {
-            BuildMode::Rustc
+            let rustc = rustup_which("rustc")?;
+            BuildMode::Rustc(rustc)
         } else if let Some(script) = options
             .script_path_lints
             .as_ref()
@@ -90,7 +97,12 @@ impl Build {
                 .as_deref()
                 .map(split_args)
                 .unwrap_or_else(|| split_args(&options.cargo_subcmd));
-            BuildMode::Cargo { subcommand }
+            let cargo_path = rustup_which("cargo")?;
+
+            BuildMode::Cargo {
+                cargo_path,
+                subcommand,
+            }
         };
 
         let verify = if options.no_verify {
@@ -136,14 +148,19 @@ impl Build {
         }
 
         let (is_ice, cmd_status, output) = match &inner.mode {
-            BuildMode::Cargo { subcommand } => {
-                let mut cmd = self.cmd("cargo");
+            BuildMode::Cargo {
+                cargo_path,
+                subcommand,
+            } => {
+                let mut cmd = self.cmd(cargo_path);
 
                 cmd.args(subcommand);
 
                 if inner.allow_color {
                     cmd.arg("--color=always");
                 }
+
+                extra_cargoflags(&mut cmd);
 
                 cmd.args(&inner.extra_args);
 
@@ -162,8 +179,8 @@ impl Build {
                     output,
                 )
             }
-            BuildMode::Rustc => {
-                let mut cmd = self.cmd("rustc");
+            BuildMode::Rustc(rustc) => {
+                let mut cmd = self.cmd(rustc);
                 cmd.args(["--edition", "2021"]);
                 cmd.arg(&inner.input_path);
 
@@ -244,12 +261,17 @@ impl Build {
         }
 
         let diags = match &inner.lint_mode {
-            BuildMode::Cargo { subcommand } => {
-                let mut cmd = self.cmd("cargo");
+            BuildMode::Cargo {
+                cargo_path,
+                subcommand,
+            } => {
+                let mut cmd = self.cmd(cargo_path);
 
                 cmd.args(subcommand);
 
                 cmd.arg("--message-format=json");
+
+                extra_cargoflags(&mut cmd);
 
                 cmd.args(&inner.extra_args);
 
@@ -262,8 +284,8 @@ impl Build {
 
                 grab_cargo_diags(&output)?
             }
-            BuildMode::Rustc => {
-                let mut cmd = self.cmd("rustc");
+            BuildMode::Rustc(rustc) => {
+                let mut cmd = self.cmd(rustc);
                 cmd.args(["--edition", "2021", "--error-format=json"]);
                 cmd.arg(&inner.input_path);
 
@@ -315,6 +337,26 @@ impl Build {
 
         Ok((diags, suggestions))
     }
+}
+
+fn extra_cargoflags(cargo: &mut Command) {
+    cargo.arg("--offline");
+}
+
+pub fn rustup_which(tool: &str) -> Result<PathBuf> {
+    let output = Command::new("rustup")
+        .arg("which")
+        .arg(tool)
+        .output()
+        .context("running rustup which")?;
+
+    ensure!(output.status.success(), "rustup which failed");
+
+    Ok(String::from_utf8(output.stdout)
+        .context("rustup which returned invalid utf8")?
+        .trim()
+        .to_owned()
+        .into())
 }
 
 #[derive(Debug)]

@@ -742,6 +742,7 @@ name = "testsuite"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cargo-minimize",
  "fs_extra",
  "once_cell",
  "rayon",

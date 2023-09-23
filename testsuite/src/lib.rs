@@ -33,7 +33,8 @@ pub fn ensure_roots_kept(
     Ok(())
 }
 
-fn run_build(command: &mut Command) -> Result<()> {
+fn run_build(cargo: &Path, command: &mut Command) -> Result<()> {
+    command.env("MINIMIZE_CARGO", cargo);
     let exit = command
         .spawn()
         .context("failed to spawn command")?
@@ -45,17 +46,22 @@ fn run_build(command: &mut Command) -> Result<()> {
 }
 
 pub fn full_tests() -> Result<()> {
-    run_build(Command::new("cargo").args([
-        "build",
-        "-p",
-        "cargo-minimize",
-        "-p",
-        "testsuite",
-        "--bin",
-        "regression_checker",
-        "--bin",
-        "cargo-minimize",
-    ]))
+    let cargo = cargo_minimize::rustup_which("cargo")?;
+
+    run_build(
+        &cargo,
+        Command::new(&cargo).args([
+            "build",
+            "-p",
+            "cargo-minimize",
+            "-p",
+            "testsuite",
+            "--bin",
+            "regression_checker",
+            "--bin",
+            "cargo-minimize",
+        ]),
+    )
     .context("running cargo build")?;
 
     let this_file = Path::new(file!())
@@ -94,7 +100,7 @@ pub fn full_tests() -> Result<()> {
             .map(|child| {
                 let path = child.path();
 
-                build(&path, &regression_checker_path)
+                build(&cargo, &path, &regression_checker_path)
                     .with_context(|| format!("building {:?}", path.file_name().unwrap()))
             })
             .collect::<Result<Vec<_>>>()?;
@@ -102,7 +108,7 @@ pub fn full_tests() -> Result<()> {
         for child in children {
             let path = child.path();
 
-            build(&path, &regression_checker_path)
+            build(&cargo, &path, &regression_checker_path)
                 .with_context(|| format!("building {:?}", path.file_name().unwrap()))?;
         }
     }
@@ -110,12 +116,12 @@ pub fn full_tests() -> Result<()> {
     Ok(())
 }
 
-fn setup_dir(path: &Path) -> Result<(TempDir, PathBuf)> {
+fn setup_dir(cargo: &Path, path: &Path) -> Result<(TempDir, PathBuf)> {
     let tempdir = tempfile::tempdir()?;
 
     let proj_name = path.file_name().unwrap().to_str().unwrap();
     let proj_name = if let Some(proj_name) = proj_name.strip_suffix(".rs") {
-        let out = Command::new("cargo")
+        let out = Command::new(cargo)
             .arg("new")
             .arg(proj_name)
             .current_dir(tempdir.path())
@@ -143,8 +149,8 @@ fn setup_dir(path: &Path) -> Result<(TempDir, PathBuf)> {
     Ok((tempdir, proj_dir))
 }
 
-fn build(path: &Path, regression_checker_path: &Path) -> Result<()> {
-    let (_tempdir, proj_dir) = setup_dir(path).context("setting up tempdir")?;
+fn build(cargo: &Path, path: &Path, regression_checker_path: &Path) -> Result<()> {
+    let (_tempdir, proj_dir) = setup_dir(cargo, path).context("setting up tempdir")?;
     let mut cargo_minimize_path = PathBuf::from("target/debug/cargo-minimize");
     if cfg!(windows) {
         cargo_minimize_path.set_extension("exe");
@@ -168,6 +174,7 @@ fn build(path: &Path, regression_checker_path: &Path) -> Result<()> {
     let minimize_roots = start_roots.join(",");
 
     cmd.env("MINIMIZE_RUNTEST_ROOTS", &minimize_roots);
+    cmd.env("MINIMIZE_CARGO", cargo);
 
     let out = cmd.output().context("spawning cargo-minimize")?;
     let stderr = String::from_utf8(out.stderr).unwrap();

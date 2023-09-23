@@ -13,6 +13,8 @@ mod formatting;
 mod passes;
 mod processor;
 
+pub use build::rustup_which;
+
 #[cfg(this_pulls_in_cargo_which_is_a_big_dep_i_dont_like_it)]
 mod expand;
 
