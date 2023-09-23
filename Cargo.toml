@@ -16,6 +16,9 @@ license = "MIT OR Apache-2.0"
 [profile.release]
 lto = "thin"
 
+[profile.dev]
+opt-level = 1
+
 [dependencies]
 anyhow = "1.0.65"
 clap = { version = "4.0.29", features = ["derive"] }
