@@ -62,12 +62,11 @@ impl Minimizer {
         suggestions: &HashMap<&Path, Vec<&Suggestion>>,
     ) -> Result<()> {
         for (sugg_file, suggestions) in suggestions {
-            let Some(file) = self
-                .files
-                .iter()
-                .find(|source| source.path.ends_with(sugg_file) || sugg_file.ends_with(&source.path)) else {
-                    continue;
-                };
+            let Some(file) = self.files.iter().find(|source| {
+                source.path.ends_with(sugg_file) || sugg_file.ends_with(&source.path)
+            }) else {
+                continue;
+            };
 
             let changes = &mut Changes::default();
 

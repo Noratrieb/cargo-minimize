@@ -21,6 +21,7 @@ anyhow = "1.0.65"
 clap = { version = "4.0.29", features = ["derive"] }
 ctrlc = "3.2.5"
 genemichaels = "0.1.21"
+libloading = "0.8.0"
 owo-colors = "3.5.0"
 proc-macro2 = { version = "1.0.48", features = ["span-locations"] }
 quote = "1.0.23"
@@ -33,6 +34,3 @@ tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
 tracing-tree = "0.2.2"
 walkdir = "2.3.2"
-
-[target."cfg(unix)".dependencies]
-libc = "0.2.138"
