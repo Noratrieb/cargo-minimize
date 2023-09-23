@@ -1,9 +1,10 @@
 //! Handles the --verify-fn flag.
 //! It takes in a Rust closure like `|str| true` that takes in a `&str` and returns a bool.
 
-use std::{fmt::Debug, str::FromStr};
+use std::{fmt::Debug, mem::ManuallyDrop, str::FromStr};
 
 use anyhow::{Context, Result};
+use libloading::Symbol;
 
 #[repr(C)]
 pub struct RawOutput {
@@ -24,7 +25,7 @@ impl FromStr for RustFunction {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Self::compile(s)
+        Self::compile(s).context("compiling and loading rust function")
     }
 }
 
@@ -83,17 +84,9 @@ fn wrap_func_body(func: &str) -> Result<String> {
 }
 
 impl RustFunction {
-    #[cfg(not(target_os = "linux"))]
-    pub fn compile(body: &str) -> Result<Self> {
-        Err(anyhow::anyhow!("--verify-fn only works on unix"))
-    }
-
-    #[cfg(target_os = "linux")]
     pub fn compile(body: &str) -> Result<Self> {
         use anyhow::bail;
-        use std::io;
         use std::process::Command;
-        use std::{ffi::CString, os::unix::prelude::OsStringExt};
 
         let file = tempfile::tempdir()?;
 
@@ -103,9 +96,17 @@ impl RustFunction {
 
         std::fs::write(&source_path, full_file).context("writing source")?;
 
+        let library_path = file.path().join("libhelper");
+
         let mut rustc = Command::new("rustc");
         rustc.arg(source_path);
-        rustc.args(["--crate-type=cdylib", "--crate-name=helper", "--emit=link"]);
+        rustc.args([
+            "--crate-type=cdylib",
+            "--crate-name=helper",
+            "--emit=link",
+            "-o",
+        ]);
+        rustc.arg(&library_path);
         rustc.current_dir(file.path());
 
         let output = rustc.output().context("running rustc")?;
@@ -114,29 +115,19 @@ impl RustFunction {
             bail!("Failed to compile code: {stderr}");
         }
 
-        let dylib_path = file.path().join("libhelper.so");
+        // SAFETY: We are loading a simple rust cdylib, which does not do weird things. But we cannot unload Rust dylibs, so we use MD below.
+        let dylib = unsafe {
+            libloading::Library::new(&library_path).context("loading helper shared library")?
+        };
+        let dylib = ManuallyDrop::new(dylib);
 
-        let os_str = dylib_path.into_os_string();
-        let vec = os_str.into_vec();
-        let cstr = CString::new(vec)?;
+        let func: Symbol<CheckerCFn> = unsafe {
+            dylib
+                .get(b"cargo_minimize_ffi_function\0")
+                .context("failed to find entrypoint symbol")?
+        };
 
-        let dylib = unsafe { libc::dlopen(cstr.as_ptr(), libc::RTLD_LAZY) };
-
-        if dylib.is_null() {
-            bail!("failed to open dylib: {}", io::Error::last_os_error());
-        }
-
-        let symbol = b"cargo_minimize_ffi_function\0";
-
-        let func = unsafe { libc::dlsym(dylib, symbol.as_ptr().cast()) };
-
-        if func.is_null() {
-            bail!("didn't find entrypoint symbol");
-        }
-
-        let func = unsafe { std::mem::transmute::<*mut _, CheckerCFn>(func) };
-
-        Ok(Self { func })
+        Ok(Self { func: *func })
     }
 
     pub fn call(&self, output: &str, code: Option<i32>) -> bool {
@@ -169,7 +160,6 @@ mod tests {
     use super::RustFunction;
 
     #[test]
-    #[cfg_attr(not(target_os = "linux"), ignore)]
     fn basic_contains_work() {
         let code = r#"|output| output.out.contains("test")"#;
 

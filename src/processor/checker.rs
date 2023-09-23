@@ -198,7 +198,8 @@ impl PassController {
     fn next_in_worklist(&mut self) {
         let PassControllerState::Bisecting {
             current, worklist, ..
-        } = &mut self.state else {
+        } = &mut self.state
+        else {
             unreachable!("next_in_worklist called on non-bisecting state");
         };
         match worklist.pop() {
