@@ -166,7 +166,7 @@ impl PassController {
                 self.state = PassControllerState::Success;
             }
             PassControllerState::Bisecting { current, .. } => {
-                unreachable!("No change while bisecting, current was empty somehow: {current:?}");
+                unreachable!("Pass said it didn't change anything in the bisection phase, nils forgot what this means: {current:?}");
             }
             PassControllerState::Success { .. } => {}
         }

@@ -10,7 +10,7 @@ use rustfix::{diagnostics::Diagnostic, Suggestion};
 use std::{
     collections::{HashMap, HashSet},
     ops::Range,
-    path::Path,
+    path::{Path, PathBuf},
 };
 use syn::{visit_mut::VisitMut, ImplItem, Item};
 
@@ -63,7 +63,8 @@ impl Minimizer {
     ) -> Result<()> {
         for (sugg_file, suggestions) in suggestions {
             let Some(file) = self.files.iter().find(|source| {
-                source.path.ends_with(sugg_file) || sugg_file.ends_with(&source.path)
+                source.path_no_fs_interact().ends_with(sugg_file)
+                    || sugg_file.ends_with(source.path_no_fs_interact())
             }) else {
                 continue;
             };
@@ -79,13 +80,14 @@ impl Minimizer {
                 .cloned()
                 .collect::<Vec<_>>();
 
-            let result = rustfix::apply_suggestions(change.before_content(), &desired_suggestions)?;
-
-            change.write(&result)?;
+            let result =
+                rustfix::apply_suggestions(change.before_content().0, &desired_suggestions)?;
+            let result = syn::parse_file(&result).context("parsing file after rustfix")?;
+            change.write(result)?;
 
             let after = self.build.build()?;
 
-            info!("{}: After reaper: {after}", file.path.display());
+            info!("{file:?}: After reaper: {after}");
 
             if after.reproduces_issue() {
                 change.commit();
@@ -101,7 +103,7 @@ impl Minimizer {
 struct DeleteUnusedFunctions {
     diags: Vec<Diagnostic>,
     build: Build,
-    invalid: HashSet<SourceFile>,
+    invalid: HashSet<PathBuf>,
 }
 
 impl DeleteUnusedFunctions {
@@ -129,7 +131,7 @@ impl Pass for DeleteUnusedFunctions {
         checker: &mut super::PassController,
     ) -> ProcessState {
         assert!(
-            !self.invalid.contains(file),
+            !self.invalid.contains(file.path_no_fs_interact()),
             "processing with invalid state"
         );
 
@@ -137,7 +139,7 @@ impl Pass for DeleteUnusedFunctions {
         visitor.visit_file_mut(krate);
 
         if visitor.process_state == ProcessState::FileInvalidated {
-            self.invalid.insert(file.clone());
+            self.invalid.insert(file.path_no_fs_interact().to_owned());
         }
 
         visitor.process_state
@@ -203,7 +205,7 @@ impl<'a> FindUnusedFunction<'a> {
                 );
 
                 // When the project directory is remapped, the path may be absolute or generally have some prefix.
-                if !file.path.ends_with(&span.file_name) {
+                if !file.path_no_fs_interact().ends_with(&span.file_name) {
                     return None;
                 }
 

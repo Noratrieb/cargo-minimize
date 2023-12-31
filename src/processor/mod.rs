@@ -98,13 +98,13 @@ impl Minimizer {
                     true
                 }
             })
-            .map(|entry| SourceFile {
-                path: entry.into_path(),
-            })
+            .map(|entry| SourceFile::open(entry.into_path()))
             .inspect(|file| {
-                info!("Collecting file: {}", file.path.display());
+                if let Ok(file) = file {
+                    info!("Collecting file: {file:?}");
+                }
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>>>()?;
 
         if files.is_empty() {
             bail!("Did not find any files for path {}", path.display());
@@ -188,20 +188,17 @@ impl Minimizer {
 
         let mut checker = PassController::new(self.options.clone());
         loop {
-            let file_display = file.path.display();
             let mut change = file.try_change(changes)?;
-            let mut krate = syn::parse_file(change.before_content())
-                .with_context(|| format!("parsing file {file_display}"))?;
+            let (_, krate) = change.before_content();
+            let mut krate = krate.clone();
             let has_made_change = pass.process_file(&mut krate, file, &mut checker);
 
             match has_made_change {
                 ProcessState::Changed | ProcessState::FileInvalidated => {
-                    let result = crate::formatting::format(krate)?;
-
-                    change.write(&result)?;
+                    change.write(krate)?;
 
                     let after = self.build.build()?;
-                    info!("{file_display}: After {}: {after}", pass.name());
+                    info!("{file:?}: After {}: {after}", pass.name());
 
                     if after.reproduces_issue() {
                         change.commit();
@@ -217,13 +214,9 @@ impl Minimizer {
                 }
                 ProcessState::NoChange => {
                     if self.options.no_color {
-                        info!("{file_display}: After {}: no changes", pass.name());
+                        info!("{file:?}: After {}: no changes", pass.name());
                     } else {
-                        info!(
-                            "{file_display}: After {}: {}",
-                            pass.name(),
-                            "no changes".yellow()
-                        );
+                        info!("{file:?}: After {}: {}", pass.name(), "no changes".yellow());
                     }
                     checker.no_change();
                 }
