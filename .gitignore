@@ -5,3 +5,5 @@ target
 /invalid
 .direnv/
 g
+perf.data*
+*.svg

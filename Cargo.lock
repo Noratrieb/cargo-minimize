@@ -113,6 +113,9 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "tracing-tree",
+ "tree-sitter",
+ "tree-sitter-edit",
+ "tree-sitter-rust",
  "walkdir",
 ]
 
@@ -853,6 +856,45 @@ dependencies = [
  "tracing-core",
  "tracing-log",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "tree-sitter"
+version = "0.20.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e747b1f9b7b931ed39a548c1fae149101497de3c1fc8d9e18c62c1a66c683d3d"
+dependencies = [
+ "cc",
+ "regex",
+]
+
+[[package]]
+name = "tree-sitter-edit"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ed3213ee656e99748eca539913b5c90df3d52618d9a1714e0935013955c8031"
+dependencies = [
+ "tree-sitter",
+ "tree-sitter-traversal",
+]
+
+[[package]]
+name = "tree-sitter-rust"
+version = "0.20.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b0832309b0b2b6d33760ce5c0e818cb47e1d72b468516bfe4134408926fa7594"
+dependencies = [
+ "cc",
+ "tree-sitter",
+]
+
+[[package]]
+name = "tree-sitter-traversal"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df8a158225e4a4d8505f071340bba9edd109b23f01b70540dccb7c799868f307"
+dependencies = [
+ "tree-sitter",
 ]
 
 [[package]]

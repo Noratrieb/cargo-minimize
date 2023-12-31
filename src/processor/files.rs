@@ -19,24 +19,26 @@ mod file {
     pub(crate) struct SourceFile {
         path: PathBuf,
         content_str: RefCell<String>,
-        content: RefCell<syn::File>,
+        content: RefCell<tree_sitter::Tree>,
     }
 
     impl SourceFile {
         pub(crate) fn open(path: PathBuf) -> Result<Self> {
             let string = std::fs::read_to_string(&path)
                 .with_context(|| format!("reading file {}", path.display()))?;
-            let content = syn::parse_file(&string)
-                .with_context(|| format!("parsing file {}", path.display()))?;
+
+            let content_ts = crate::tree_sitter::parse(&string)
+                .with_context(|| format!("parsing file {path:?}"))?;
+
             Ok(SourceFile {
                 path,
                 content_str: RefCell::new(string),
-                content: RefCell::new(content),
+                content: RefCell::new(content_ts),
             })
         }
 
-        pub(crate) fn write(&self, new: syn::File) -> Result<()> {
-            let string = crate::formatting::format(new.clone())?;
+        pub(crate) fn write(&self, new: tree_sitter::Tree) -> Result<()> {
+            let string = crate::tree_sitter::format(new, &*self.content_str.borrow())?;
             std::fs::write(&self.path, &string)
                 .with_context(|| format!("writing file {}", self.path.display()))?;
             *self.content_str.borrow_mut() = string;
@@ -96,17 +98,17 @@ pub(crate) struct FileChange<'a, 'b> {
     pub(crate) path: &'a Path,
     source_file: &'a SourceFile,
     before_content_str: String,
-    before_content: syn::File,
+    before_content: tree_sitter::Tree,
     changes: &'b mut Changes,
     has_written_change: bool,
 }
 
 impl FileChange<'_, '_> {
-    pub(crate) fn before_content(&self) -> (&str, &syn::File) {
+    pub(crate) fn before_content(&self) -> (&str, &tree_sitter::Tree) {
         (&self.before_content_str, &self.before_content)
     }
 
-    pub(crate) fn write(&mut self, new: syn::File) -> Result<()> {
+    pub(crate) fn write(&mut self, new: tree_sitter::Tree) -> Result<()> {
         self.has_written_change = true;
         self.source_file.write(new)?;
         Ok(())
