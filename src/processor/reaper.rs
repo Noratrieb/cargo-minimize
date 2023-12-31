@@ -83,7 +83,7 @@ impl Minimizer {
             let result =
                 rustfix::apply_suggestions(change.before_content().0, &desired_suggestions)?;
             let result = crate::tree_sitter::parse(&result).context("parsing file after rustfix")?;
-            change.write(result)?;
+            change.write(result, &[])?;
 
             let after = self.build.build()?;
 

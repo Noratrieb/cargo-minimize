@@ -1,6 +1,6 @@
 [workspace]
 members = ["./", "./testsuite"]
-exclude = ["test-cases/*", "full-tests/*"]
+exclude = ["full-tests/*"]
 
 [package]
 name = "cargo-minimize"

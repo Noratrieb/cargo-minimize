@@ -1,5 +1,7 @@
 use anyhow::{Context, Result};
 
+use crate::processor::{MinimizeEdit, MinimizeEditKind};
+
 pub fn parse(source: &str) -> Result<tree_sitter::Tree> {
     let mut parser = tree_sitter::Parser::new();
     parser
@@ -9,26 +11,43 @@ pub fn parse(source: &str) -> Result<tree_sitter::Tree> {
     Ok(content_ts)
 }
 
-pub fn format(file: tree_sitter::Tree, source: &str) -> anyhow::Result<String> {
+pub fn apply_edits(
+    file: tree_sitter::Tree, // Taking it by value as the old tree should not be used afterwards
+    source: &str,
+    edits: &[MinimizeEdit],
+) -> anyhow::Result<String> {
     let mut s = Vec::new();
-    tree_sitter_edit::render(&mut s, &file, source.as_bytes(), &Editor);
+    tree_sitter_edit::render(&mut s, &file, source.as_bytes(), &MinimizeEditor { edits })
+        .context("printing tree")?;
 
     Ok(String::from_utf8(s).unwrap())
 }
 
-struct Editor;
+struct MinimizeEditor<'a> {
+    edits: &'a [MinimizeEdit],
+}
 
-impl tree_sitter_edit::Editor for Editor {
-    fn has_edit(&self, tree: &tree_sitter::Tree, node: &tree_sitter::Node<'_>) -> bool {
-        false
+impl tree_sitter_edit::Editor for MinimizeEditor<'_> {
+    fn has_edit(&self, _tree: &tree_sitter::Tree, node: &tree_sitter::Node<'_>) -> bool {
+        self.edits.iter().any(|edit| edit.node_id.is(node))
     }
 
     fn edit(
         &self,
-        source: &[u8],
-        tree: &tree_sitter::Tree,
+        _source: &[u8],
+        _tree: &tree_sitter::Tree,
         node: &tree_sitter::Node<'_>,
     ) -> Vec<u8> {
-        unimplemented!()
+        self.edits
+            .iter()
+            .filter(|edit| edit.node_id.is(node))
+            .find_map(|edit| {
+                Some({
+                    match edit.kind {
+                        MinimizeEditKind::DeleteNode => Vec::new(),
+                    }
+                })
+            })
+            .unwrap()
     }
 }

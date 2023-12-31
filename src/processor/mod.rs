@@ -5,10 +5,11 @@ mod reaper;
 pub(crate) use self::files::SourceFile;
 use crate::{build::Build, processor::files::Changes, Options};
 use anyhow::{bail, Context, Result};
-use owo_colors::OwoColorize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::{collections::HashSet, ffi::OsStr, fmt::Debug, sync::atomic::AtomicBool};
+use tree_sitter::Node;
+use tree_sitter_edit::NodeId;
 
 pub(crate) use self::checker::PassController;
 
@@ -22,10 +23,14 @@ pub(crate) trait Pass {
     /// before calling the this function on the same file again.
     fn process_file(
         &mut self,
-        krate: &mut syn::File,
-        file: &SourceFile,
-        checker: &mut PassController,
-    ) -> ProcessState;
+        _krate: &mut syn::File,
+        _file: &SourceFile,
+        _checker: &mut PassController,
+    ) -> ProcessState {
+        unimplemented!()
+    }
+
+    fn edits_for_node(&mut self, _node: tree_sitter::Node, _edits: &mut Vec<MinimizeEdit>) {}
 
     fn name(&self) -> &'static str;
 
@@ -48,6 +53,17 @@ pub(crate) enum ProcessState {
     NoChange,
     Changed,
     FileInvalidated,
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct MinimizeEdit {
+    pub(crate) node_id: NodeId,
+    pub(crate) kind: MinimizeEditKind,
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum MinimizeEditKind {
+    DeleteNode,
 }
 
 #[derive(Debug)]
@@ -173,12 +189,12 @@ impl Minimizer {
         }
     }
 
-    #[instrument(skip(self, pass, invalidated_files, changes), fields(pass = %pass.name()), level = "debug")]
+    #[instrument(skip(self, pass, _invalidated_files, changes), fields(pass = %pass.name()), level = "debug")]
     fn process_file<'file>(
         &self,
         pass: &mut dyn Pass,
         file: &'file SourceFile,
-        invalidated_files: &mut HashSet<&'file SourceFile>,
+        _invalidated_files: &mut HashSet<&'file SourceFile>,
         changes: &mut Changes,
     ) -> Result<()> {
         // The core logic of minimization.
@@ -186,16 +202,34 @@ impl Minimizer {
         // For this, we repeatedly try to apply a pass to a subset of a file until we've exhausted all options.
         // The logic for bisecting down lives in PassController.
 
-        let mut checker = PassController::new(self.options.clone());
+        let mut edits = Vec::new();
+
+        let krate = file.borrow_tree();
+        recursive_walk_node(krate.root_node(), &mut |node| {
+            pass.edits_for_node(node, &mut edits);
+        });
+        drop(krate);
+
+        let mut checker = PassController::new(self.options.clone(), edits);
         loop {
             let mut change = file.try_change(changes)?;
             let (_, krate) = change.before_content();
-            let mut krate = krate.clone();
-            let has_made_change = pass.process_file(&mut krate, file, &mut checker);
+            let krate = krate.clone();
 
-            match has_made_change {
-                ProcessState::Changed | ProcessState::FileInvalidated => {
-                    change.write(krate)?;
+            let edits = checker.current_work_items();
+
+            match edits.len() {
+                0 => {
+                    use owo_colors::OwoColorize;
+                    if self.options.no_color {
+                        info!("{file:?}: After {}: no changes", pass.name());
+                    } else {
+                        info!("{file:?}: After {}: {}", pass.name(), "no changes".yellow());
+                    }
+                    checker.no_change();
+                }
+                1.. => {
+                    change.write(krate, edits)?;
 
                     let after = self.build.build()?;
                     info!("{file:?}: After {}: {after}", pass.name());
@@ -207,18 +241,6 @@ impl Minimizer {
                         change.rollback()?;
                         checker.does_not_reproduce();
                     }
-
-                    if has_made_change == ProcessState::FileInvalidated {
-                        invalidated_files.insert(file);
-                    }
-                }
-                ProcessState::NoChange => {
-                    if self.options.no_color {
-                        info!("{file:?}: After {}: no changes", pass.name());
-                    } else {
-                        info!("{file:?}: After {}: {}", pass.name(), "no changes".yellow());
-                    }
-                    checker.no_change();
                 }
             }
 
@@ -232,6 +254,14 @@ impl Minimizer {
             }
         }
         Ok(())
+    }
+}
+
+fn recursive_walk_node<'a>(node: Node<'a>, for_each: &mut impl FnMut(Node<'_>)) {
+    for i in 0..node.child_count() {
+        let child = node.child(i).unwrap();
+        for_each(child);
+        recursive_walk_node(child, for_each);
     }
 }
 
