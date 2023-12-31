@@ -4,6 +4,8 @@ use crate::Options;
 
 use self::worklist::Worklist;
 
+use super::MinimizeEdit;
+
 #[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 struct AstPath(Vec<String>);
 
@@ -31,22 +33,18 @@ pub(crate) struct PassController {
 /// The current state of the bisection.
 #[derive(Debug)]
 enum PassControllerState {
-    /// Initially, we have a bunch of candidates (minimization sites) that could be applied.
-    /// We collect them in the initial application of the pass where we try to apply all candiates.
-    /// If that works, great! We're done. But often it doesn't and we enter the next stage.
-    InitialCollection { candidates: Vec<AstPath> },
     /// After applying all candidates fails, we know that we have a few bad candidates.
     /// Now our job is to apply all the good candidates as efficiently as possible.
     Bisecting {
         /// These candidates could be applied successfully while still reproducing the issue.
         /// They are now on disk and will be included in all subsequent runs.
         /// This is only used for debugging, we could also just throw them away.
-        committed: BTreeSet<AstPath>,
+        committed: BTreeSet<MinimizeEdit>,
         /// These candidates failed in isolation and are therefore bad.
         /// This is only used for debugging, we could also just throw them away.
-        failed: BTreeSet<AstPath>,
+        failed: BTreeSet<MinimizeEdit>,
         /// The set of candidates that we want to apply in this iteration.
-        current: BTreeSet<AstPath>,
+        current: Vec<MinimizeEdit>,
         /// The list of `current`s that we want to try in the future.
         worklist: Worklist,
     },
@@ -55,34 +53,37 @@ enum PassControllerState {
 }
 
 mod worklist {
-    use super::AstPath;
+    use crate::processor::MinimizeEdit;
 
     /// A worklist that ensures that the inner list is never empty.
     #[derive(Debug)]
-    pub(super) struct Worklist(Vec<Vec<AstPath>>);
+    pub(super) struct Worklist(Vec<Vec<MinimizeEdit>>);
 
     impl Worklist {
         pub(super) fn new() -> Self {
             Self(Vec::new())
         }
 
-        pub(super) fn push(&mut self, next: Vec<AstPath>) {
+        pub(super) fn push(&mut self, next: Vec<MinimizeEdit>) {
             if !next.is_empty() {
                 self.0.push(next);
             }
         }
 
-        pub(super) fn pop(&mut self) -> Option<Vec<AstPath>> {
+        pub(super) fn pop(&mut self) -> Option<Vec<MinimizeEdit>> {
             self.0.pop()
         }
     }
 }
 
 impl PassController {
-    pub fn new(options: Options) -> Self {
+    pub fn new(options: Options, edits: Vec<MinimizeEdit>) -> Self {
         Self {
-            state: PassControllerState::InitialCollection {
-                candidates: Vec::new(),
+            state: PassControllerState::Bisecting {
+                committed: BTreeSet::new(),
+                failed: BTreeSet::new(),
+                current: edits,
+                worklist: Worklist::new(),
             },
             options,
         }
@@ -90,9 +91,6 @@ impl PassController {
 
     pub fn reproduces(&mut self) {
         match &mut self.state {
-            PassControllerState::InitialCollection { .. } => {
-                self.state = PassControllerState::Success;
-            }
             PassControllerState::Bisecting {
                 committed,
                 failed: _,
@@ -110,20 +108,6 @@ impl PassController {
     /// The changes did not reproduce the regression. Bisect further.
     pub fn does_not_reproduce(&mut self) {
         match &mut self.state {
-            PassControllerState::InitialCollection { candidates } => {
-                // Applying them all was too much, let's bisect!
-                let (current, first_worklist_item) = split_owned(mem::take(candidates));
-
-                let mut worklist = Worklist::new();
-                worklist.push(first_worklist_item);
-
-                self.state = PassControllerState::Bisecting {
-                    committed: BTreeSet::new(),
-                    failed: BTreeSet::new(),
-                    current,
-                    worklist,
-                };
-            }
             PassControllerState::Bisecting {
                 committed,
                 failed,
@@ -158,15 +142,9 @@ impl PassController {
     /// The pass did not apply any changes. We're done.
     pub fn no_change(&mut self) {
         match &self.state {
-            PassControllerState::InitialCollection { candidates } => {
-                assert!(
-                    candidates.is_empty(),
-                    "No change but received candidates. The responsible pass does not seem to track the ProcessState correctly: {candidates:?}"
-                );
-                self.state = PassControllerState::Success;
-            }
             PassControllerState::Bisecting { current, .. } => {
-                unreachable!("Pass said it didn't change anything in the bisection phase, nils forgot what this means: {current:?}");
+                assert!(current.is_empty(), "there are edits available and yet nothing changed, that's nonsense, there's a bug somewhere (i dont know where)");
+                self.state = PassControllerState::Success;
             }
             PassControllerState::Success { .. } => {}
         }
@@ -174,21 +152,19 @@ impl PassController {
 
     pub fn is_finished(&mut self) -> bool {
         match &mut self.state {
-            PassControllerState::InitialCollection { .. } => false,
             PassControllerState::Bisecting { .. } => false,
             PassControllerState::Success { .. } => true,
         }
     }
 
+    pub fn can_process(&mut self, _: &[String]) -> bool {
+        false
+    }
+
     /// Checks whether a pass may apply the changes for a minimization site.
-    pub fn can_process(&mut self, path: &[String]) -> bool {
+    pub fn current_work_items(&mut self) -> &[MinimizeEdit] {
         match &mut self.state {
-            PassControllerState::InitialCollection { candidates } => {
-                // For the initial collection, we collect the candidate and apply them all.
-                candidates.push(AstPath(path.to_owned()));
-                true
-            }
-            PassControllerState::Bisecting { current, .. } => current.contains(path),
+            PassControllerState::Bisecting { current, .. } => current,
             PassControllerState::Success { .. } => {
                 unreachable!("Processed further after success");
             }

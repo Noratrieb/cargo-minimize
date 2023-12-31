@@ -101,7 +101,7 @@ pub fn full_tests() -> Result<()> {
                 let path = child.path();
 
                 build(&cargo, &path, &regression_checker_path)
-                    .with_context(|| format!("building {:?}", path.file_name().unwrap()))
+                    .with_context(|| format!("test {:?}", path.file_name().unwrap()))
             })
             .collect::<Result<Vec<_>>>()?;
     } else {
@@ -109,7 +109,7 @@ pub fn full_tests() -> Result<()> {
             let path = child.path();
 
             build(&cargo, &path, &regression_checker_path)
-                .with_context(|| format!("building {:?}", path.file_name().unwrap()))?;
+                .with_context(|| format!("test {:?}", path.file_name().unwrap()))?;
         }
     }
 
@@ -159,6 +159,10 @@ fn build(cargo: &Path, path: &Path, regression_checker_path: &Path) -> Result<()
         .canonicalize()
         .context("canonicalizing target/debug/cargo-minimize")?;
 
+    if is_ignored(&proj_dir).context("checking whether the test is ignored")? {
+        return Ok(());
+    }
+
     let start_roots = get_roots(&proj_dir).context("getting initial MINIMIZE-ROOTs")?;
 
     let mut cmd = Command::new(cargo_minimize);
@@ -207,6 +211,12 @@ fn get_required_deleted(path: &Path) -> Result<Vec<String>> {
     static REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"~REQUIRE-DELETED ([\w\-_]+)").unwrap());
 
     grep(path, &REGEX)
+}
+
+fn is_ignored(path: &Path) -> Result<bool> {
+    static REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"~IGNORE").unwrap());
+
+    grep(path, &REGEX).map(|v| !v.is_empty())
 }
 
 fn grep(path: &Path, regex: &Regex) -> Result<Vec<String>> {

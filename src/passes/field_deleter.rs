@@ -1,7 +1,7 @@
 use quote::ToTokens;
 use syn::{visit_mut::VisitMut, Fields};
 
-use crate::processor::{tracking, Pass, PassController, ProcessState, SourceFile};
+use crate::processor::{tracking, Pass, PassController, ProcessState, SourceFile, MinimizeEdit};
 
 struct Visitor<'a> {
     current_path: Vec<String>,
@@ -73,6 +73,17 @@ impl Pass for FieldDeleter {
         let mut visitor = Visitor::new(checker);
         visitor.visit_file_mut(krate);
         visitor.process_state
+    }
+
+    fn edits_for_node(&mut self, node: tree_sitter::Node, _edits: &mut Vec<MinimizeEdit>) {
+        match node.kind() {
+            // Braced structs
+            "field_declaration_list" => {}
+            // Tuple structs
+            "ordered_field_declaration_list" => {}
+            _ => {}
+        }
+        
     }
 
     fn name(&self) -> &'static str {

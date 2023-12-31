@@ -3,12 +3,16 @@ use std::{fs, path::Path};
 
 pub(crate) use self::file::SourceFile;
 
+use super::MinimizeEdit;
+
 mod file {
     use anyhow::{Context, Result};
     use std::{
         cell::RefCell,
         path::{Path, PathBuf},
     };
+
+    use crate::processor::MinimizeEdit;
 
     use super::{Changes, FileChange};
 
@@ -19,33 +23,58 @@ mod file {
     pub(crate) struct SourceFile {
         path: PathBuf,
         content_str: RefCell<String>,
-        content: RefCell<syn::File>,
+        content: RefCell<tree_sitter::Tree>,
     }
 
     impl SourceFile {
         pub(crate) fn open(path: PathBuf) -> Result<Self> {
             let string = std::fs::read_to_string(&path)
                 .with_context(|| format!("reading file {}", path.display()))?;
-            let content = syn::parse_file(&string)
-                .with_context(|| format!("parsing file {}", path.display()))?;
+
+            let content_ts = crate::tree_sitter::parse(&string)
+                .with_context(|| format!("parsing file {path:?}"))?;
+
             Ok(SourceFile {
                 path,
                 content_str: RefCell::new(string),
-                content: RefCell::new(content),
+                content: RefCell::new(content_ts),
             })
         }
 
-        pub(crate) fn write(&self, new: syn::File) -> Result<()> {
-            let string = crate::formatting::format(new.clone())?;
+        pub(crate) fn write(&self, new: tree_sitter::Tree, edits: &[MinimizeEdit]) -> Result<()> {
+            let string = crate::tree_sitter::apply_edits(new, &*self.content_str.borrow(), edits)?;
             std::fs::write(&self.path, &string)
                 .with_context(|| format!("writing file {}", self.path.display()))?;
+
+            let reparsed =
+                crate::tree_sitter::parse(&string).expect("failed to reparse after edit");
+
             *self.content_str.borrow_mut() = string;
-            *self.content.borrow_mut() = new;
+            *self.content.borrow_mut() = reparsed;
             Ok(())
         }
 
         pub(crate) fn path_no_fs_interact(&self) -> &Path {
             &self.path
+        }
+
+        pub(crate) fn borrow_tree(&self) -> std::cell::Ref<'_, tree_sitter::Tree> {
+            self.content.borrow()
+        }
+
+        pub(crate) fn try_change<'file, 'change>(
+            &'file self,
+            changes: &'change mut Changes,
+        ) -> Result<FileChange<'file, 'change>> {
+            let path = &self.path;
+            Ok(FileChange {
+                path,
+                source_file: self,
+                changes,
+                has_written_change: false,
+                before_content_str: self.content_str.borrow().clone(),
+                before_content: self.content.borrow().clone(),
+            })
         }
     }
 
@@ -68,23 +97,6 @@ mod file {
             write!(f, "{}", self.path.display())
         }
     }
-
-    impl SourceFile {
-        pub(crate) fn try_change<'file, 'change>(
-            &'file self,
-            changes: &'change mut Changes,
-        ) -> Result<FileChange<'file, 'change>> {
-            let path = &self.path;
-            Ok(FileChange {
-                path,
-                source_file: self,
-                changes,
-                has_written_change: false,
-                before_content_str: self.content_str.borrow().clone(),
-                before_content: self.content.borrow().clone(),
-            })
-        }
-    }
 }
 
 #[derive(Default)]
@@ -96,26 +108,26 @@ pub(crate) struct FileChange<'a, 'b> {
     pub(crate) path: &'a Path,
     source_file: &'a SourceFile,
     before_content_str: String,
-    before_content: syn::File,
+    before_content: tree_sitter::Tree,
     changes: &'b mut Changes,
     has_written_change: bool,
 }
 
 impl FileChange<'_, '_> {
-    pub(crate) fn before_content(&self) -> (&str, &syn::File) {
+    pub(crate) fn before_content(&self) -> (&str, &tree_sitter::Tree) {
         (&self.before_content_str, &self.before_content)
     }
 
-    pub(crate) fn write(&mut self, new: syn::File) -> Result<()> {
+    pub(crate) fn write(&mut self, new: tree_sitter::Tree, edits: &[MinimizeEdit]) -> Result<()> {
         self.has_written_change = true;
-        self.source_file.write(new)?;
+        self.source_file.write(new, edits)?;
         Ok(())
     }
 
     pub(crate) fn rollback(mut self) -> Result<()> {
         assert!(self.has_written_change);
         self.has_written_change = false;
-        self.source_file.write(self.before_content.clone())?;
+        self.source_file.write(self.before_content.clone(), &[])?;
         Ok(())
     }
 

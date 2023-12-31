@@ -32,7 +32,7 @@ impl FromStr for RustFunction {
 fn wrap_func_body(func: &str) -> Result<String> {
     let closure = syn::parse_str::<syn::ExprClosure>(func).context("invalid rust syntax")?;
 
-    let syn_file = syn::parse_quote! {
+    let file = quote::quote! {
         #[repr(C)]
         pub struct __RawOutput {
             out_ptr: *const u8,
@@ -80,7 +80,7 @@ fn wrap_func_body(func: &str) -> Result<String> {
         }
     };
 
-    crate::formatting::format(syn_file)
+    Ok(file.to_string())
 }
 
 impl RustFunction {
