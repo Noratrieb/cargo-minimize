@@ -187,6 +187,7 @@ impl Minimizer {
         // The logic for bisecting down lives in PassController.
 
         let mut checker = PassController::new(self.options.clone());
+        let mut initial_pass = true;
         loop {
             let mut change = file.try_change(changes)?;
             let (_, krate) = change.before_content();
@@ -213,14 +214,17 @@ impl Minimizer {
                     }
                 }
                 ProcessState::NoChange => {
-                    if self.options.no_color {
-                        info!("{file:?}: After {}: no changes", pass.name());
-                    } else {
-                        info!("{file:?}: After {}: {}", pass.name(), "no changes".yellow());
+                    if !initial_pass {
+                        if self.options.no_color {
+                            info!("{file:?}: After {}: no changes", pass.name());
+                        } else {
+                            info!("{file:?}: After {}: {}", pass.name(), "no changes".yellow());
+                        }
                     }
                     checker.no_change();
                 }
             }
+            initial_pass = false;
 
             if self.cancel.load(Ordering::SeqCst) {
                 info!("Exiting early.");
