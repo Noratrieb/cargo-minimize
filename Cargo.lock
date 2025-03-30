@@ -102,6 +102,7 @@ dependencies = [
  "ctrlc",
  "genemichaels",
  "libloading",
+ "markdown",
  "owo-colors",
  "proc-macro2",
  "quote",
