@@ -6,6 +6,14 @@ use self::worklist::Worklist;
 
 #[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 struct AstPath(Vec<String>);
+impl AstPath {
+    fn has_prefix(&self, other: &AstPath) -> bool {
+        if self.0.len() < other.0.len() {
+            return false;
+        }
+        std::iter::zip(self.0.iter(), other.0.iter()).all(|(a, b)| a == b)
+    }
+}
 
 impl Borrow<[String]> for AstPath {
     fn borrow(&self) -> &[String] {
@@ -75,6 +83,20 @@ mod worklist {
         pub(super) fn pop(&mut self) -> Option<Vec<AstPath>> {
             self.0.pop()
         }
+
+        // remove all the worklist items that would have been covered by the
+        // given ones.
+        // I.e. if we have already deleted the entire module, there's no need
+        // trying to delete that module's individual items anymore
+        pub(super) fn prune(&mut self, things: &std::collections::BTreeSet<AstPath>) {
+            for wl in &mut self.0 {
+                wl.retain(|path| {
+                    // retain only if none of the things are a prefix of this path
+                    things.iter().all(|thing| !path.has_prefix(thing))
+                })
+            }
+            self.0.retain(|wl| !wl.is_empty());
+        }
     }
 }
 
@@ -97,8 +119,9 @@ impl PassController {
                 committed,
                 failed: _,
                 current,
-                worklist: _,
+                worklist,
             } => {
+                worklist.prune(current);
                 committed.extend(mem::take(current));
 
                 self.next_in_worklist();
@@ -110,19 +133,8 @@ impl PassController {
     /// The changes did not reproduce the regression. Bisect further.
     pub fn does_not_reproduce(&mut self) {
         match &mut self.state {
-            PassControllerState::InitialCollection { candidates } => {
-                // Applying them all was too much, let's bisect!
-                let (current, first_worklist_item) = split_owned(mem::take(candidates));
-
-                let mut worklist = Worklist::new();
-                worklist.push(first_worklist_item);
-
-                self.state = PassControllerState::Bisecting {
-                    committed: BTreeSet::new(),
-                    failed: BTreeSet::new(),
-                    current,
-                    worklist,
-                };
+            PassControllerState::InitialCollection { candidates: _ } => {
+                unreachable!("we should have made no changes on initial collection, what do you mean it does not reproduce?!?")
             }
             PassControllerState::Bisecting {
                 committed,
@@ -155,15 +167,24 @@ impl PassController {
         }
     }
 
-    /// The pass did not apply any changes. We're done.
+    /// The pass did not apply any changes. We're either done or just starting
     pub fn no_change(&mut self) {
-        match &self.state {
+        match &mut self.state {
             PassControllerState::InitialCollection { candidates } => {
-                assert!(
-                    candidates.is_empty(),
-                    "No change but received candidates. The responsible pass does not seem to track the ProcessState correctly: {candidates:?}"
-                );
-                self.state = PassControllerState::Success;
+                if candidates.is_empty() {
+                    self.state = PassControllerState::Success;
+                } else {
+                    let current = mem::take(candidates)
+                        .into_iter()
+                        .collect::<BTreeSet<AstPath>>();
+
+                    self.state = PassControllerState::Bisecting {
+                        committed: BTreeSet::new(),
+                        failed: BTreeSet::new(),
+                        current,
+                        worklist: Worklist::new(),
+                    };
+                }
             }
             PassControllerState::Bisecting { current, .. } => {
                 unreachable!("Pass said it didn't change anything in the bisection phase, nils forgot what this means: {current:?}");
@@ -184,9 +205,9 @@ impl PassController {
     pub fn can_process(&mut self, path: &[String]) -> bool {
         match &mut self.state {
             PassControllerState::InitialCollection { candidates } => {
-                // For the initial collection, we collect the candidate and apply them all.
+                // For the initial collection, we collect the candidate but don't apply anything
                 candidates.push(AstPath(path.to_owned()));
-                true
+                false
             }
             PassControllerState::Bisecting { current, .. } => current.contains(path),
             PassControllerState::Success { .. } => {
@@ -205,6 +226,7 @@ impl PassController {
         match worklist.pop() {
             Some(next) => {
                 *current = next.into_iter().collect();
+                trace!(?current, "current working set: ");
             }
             None => {
                 self.state = PassControllerState::Success;
