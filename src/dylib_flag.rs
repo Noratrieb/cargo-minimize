@@ -25,7 +25,8 @@ impl FromStr for RustFunction {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Self::compile(s).context("compiling and loading rust function")
+        Self::compile(s)
+            .map_err(|e| anyhow::format_err!("compiling and loading rust function: {:?}", e))
     }
 }
 
