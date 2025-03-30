@@ -24,6 +24,7 @@ anyhow = "1.0.65"
 clap = { version = "4.0.29", features = ["derive"] }
 ctrlc = "3.2.5"
 genemichaels = "0.1.21"
+markdown = { version = "=1.0.0-alpha.14" } # pinning the version to ensure genemichaels builds.
 libloading = "0.8.0"
 owo-colors = "3.5.0"
 proc-macro2 = { version = "1.0.48", features = ["span-locations"] }
