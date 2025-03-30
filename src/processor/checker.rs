@@ -174,15 +174,22 @@ impl PassController {
                 if candidates.is_empty() {
                     self.state = PassControllerState::Success;
                 } else {
-                    let current = mem::take(candidates)
-                        .into_iter()
-                        .collect::<BTreeSet<AstPath>>();
+                    // We could just set `current=candidates; worklist=default()`,
+                    // but we are doing a minor optimization to split overlapping items into separate tries,
+                    // so as to reduce the number of bisection steps that yield literally no new info.
+                    let layers = layer_candidates(mem::take(candidates));
+                    let mut worklist = Worklist::new();
+                    for layer in layers.into_iter().rev() {
+                        // .rev() so that we add shorter paths last, and process them first
+                        worklist.push(layer);
+                    }
+                    let current = worklist.pop().unwrap().into_iter().collect();
 
                     self.state = PassControllerState::Bisecting {
                         committed: BTreeSet::new(),
                         failed: BTreeSet::new(),
                         current,
-                        worklist: Worklist::new(),
+                        worklist,
                     };
                 }
             }
@@ -260,4 +267,34 @@ fn split_owned<T, From: IntoIterator<Item = T>, A: FromIterator<T>, B: FromItera
     let second_half = candidates.collect();
 
     (first_half, second_half)
+}
+
+/// Split up a list of AstPath's into several sets such that none of those sets have
+/// any of the AstPath's overlap.
+/// I.e. so that we avoid having both ["foo"] and ["foo", "bar"] in the same set.
+/// It is expected, but not guaranteed that the earlier sets would contain "less granular" items
+/// (i.e. ["foo"] from the above example) and the latter sets would contain the "more granular" ones.
+fn layer_candidates(mut candidates: Vec<AstPath>) -> Vec<Vec<AstPath>> {
+    candidates.sort(); // this *should* put less-granular/shorter-path items first
+    let mut layers: Vec<Vec<AstPath>> = vec![];
+    for candidate in candidates {
+        let mut appropriate_layer_no = None;
+        for (no, layer) in layers.iter().enumerate() {
+            if !layer
+                .iter()
+                .any(|known_path| candidate.has_prefix(known_path))
+            {
+                appropriate_layer_no = Some(no);
+                break;
+            }
+        }
+        match appropriate_layer_no {
+            Some(no) => layers[no].push(candidate),
+            None => {
+                let new_layer = vec![candidate];
+                layers.push(new_layer);
+            }
+        }
+    }
+    layers
 }
