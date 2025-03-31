@@ -1,7 +1,9 @@
+use std::ops::DerefMut;
+
 use crate::processor::{tracking, Pass, PassController, ProcessState, SourceFile};
 use quote::ToTokens;
 
-use syn::{visit_mut::VisitMut, Item, ItemUse};
+use syn::{visit_mut::VisitMut, Item, ItemUse, UseName, UsePath, UseRename, UseTree};
 
 struct Visitor<'a> {
     process_state: ProcessState,
@@ -20,11 +22,11 @@ impl<'a> Visitor<'a> {
 
     // given a "some::group::{a, b::{c,d}, e}" tree, and assuming checker allows processing of (only) "some::group",
     // returns a ["some::group::a", "some::group::b::{c,d}", "some::group::e"] list of trees.
-    fn expand_use_groups(&mut self, top: &syn::ItemUse, tree: &syn::UseTree) -> Vec<syn::UseTree> {
+    fn expand_use_groups(&mut self, top: &syn::ItemUse, tree: &UseTree) -> Vec<UseTree> {
         // It would probably be nice if instead of *expanding* the whole "some::group" group, we could instead
         // *extract* individual items ("some::group::a"), but that makes code much more convoluted, sadly
         match tree {
-            syn::UseTree::Path(p) => {
+            UseTree::Path(p) => {
                 self.current_path.push(p.ident.to_string());
 
                 let out = self
@@ -33,14 +35,14 @@ impl<'a> Visitor<'a> {
                     .map(|x| {
                         let mut new = p.clone();
                         new.tree = Box::new(x);
-                        syn::UseTree::Path(new)
+                        UseTree::Path(new)
                     })
                     .collect();
 
                 self.current_path.pop();
                 out
             }
-            syn::UseTree::Group(g) => {
+            UseTree::Group(g) => {
                 let new_trees = g
                     .items
                     .iter()
@@ -51,6 +53,7 @@ impl<'a> Visitor<'a> {
                 self.current_path.push("{{group}}".to_string());
                 let can_process = self.checker.can_process(&self.current_path);
                 self.current_path.pop();
+
                 if can_process {
                     self.process_state = ProcessState::Changed;
                     return new_trees;
@@ -85,6 +88,7 @@ impl<'a> Visitor<'a> {
             let new_uses = new_use_trees.into_iter().map(|x| {
                 let mut new = item_use.clone();
                 new.tree = x;
+                trim_trailing_self(&mut new.tree);
                 syn::Item::Use(new)
             });
 
@@ -93,6 +97,44 @@ impl<'a> Visitor<'a> {
             items.splice(pos..pos + 1, new_uses);
             pos += step; // do not process freshly inserted items
         }
+    }
+}
+
+// It is legal to write "use module::{self};", but not "use module::self;".
+// If we do end up with the latter on our hands, convert it to "use module;" instead.
+fn trim_trailing_self(use_tree: &mut UseTree) {
+    match use_tree {
+        UseTree::Path(UsePath {
+            tree: subtree,
+            ident: base_ident,
+            ..
+        }) => match subtree.deref_mut() {
+            UseTree::Name(UseName { ident: sub_ident }) => {
+                if sub_ident == "self" {
+                    *use_tree = UseTree::Name(UseName {
+                        ident: base_ident.clone(),
+                    });
+                    return;
+                }
+            }
+            UseTree::Rename(syn::UseRename {
+                ident: sub_ident,
+                rename,
+                as_token,
+            }) => {
+                if sub_ident == "self" {
+                    *use_tree = UseTree::Rename(UseRename {
+                        ident: base_ident.clone(),
+                        rename: rename.clone(),
+                        as_token: as_token.clone(),
+                    });
+                    return;
+                }
+            }
+            UseTree::Path(_) => trim_trailing_self(&mut *subtree),
+            _ => {}
+        },
+        _ => {}
     }
 }
 
