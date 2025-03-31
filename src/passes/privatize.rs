@@ -24,11 +24,31 @@ impl<'a> Visitor<'a> {
 impl VisitMut for Visitor<'_> {
     fn visit_visibility_mut(&mut self, vis: &mut Visibility) {
         if let Visibility::Public(_) = vis {
+            self.current_path.push("{{vis}}".to_string());
             if self.checker.can_process(&self.current_path) {
                 self.process_state = ProcessState::Changed;
                 *vis = self.pub_crate.clone();
             }
+            self.current_path.pop();
         }
+    }
+    fn visit_item_mut(&mut self, item: &mut syn::Item) {
+        match item {
+            syn::Item::Use(u) => {
+                if let Visibility::Public(_) = u.vis {
+                    let mut path = self.current_path.clone();
+                    path.push(u.to_token_stream().to_string());
+                    if self.checker.can_process(&path) {
+                        self.process_state = ProcessState::Changed;
+                        u.vis = self.pub_crate.clone();
+                    }
+                    path.pop();
+                }
+                return; // early return; do not walk the child items
+            }
+            _ => {}
+        }
+        syn::visit_mut::visit_item_mut(self, item);
     }
 
     tracking!();
