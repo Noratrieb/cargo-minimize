@@ -1,7 +1,8 @@
 use quote::ToTokens;
 use syn::{
     visit_mut::VisitMut, Item, ItemConst, ItemEnum, ItemExternCrate, ItemFn, ItemMacro, ItemMacro2,
-    ItemMod, ItemStatic, ItemStruct, ItemTrait, ItemTraitAlias, ItemType, ItemUnion, Signature,
+    ItemMod, ItemStatic, ItemStruct, ItemTrait, ItemTraitAlias, ItemType, ItemUnion, ItemUse,
+    Signature,
 };
 
 use crate::processor::{tracking, Pass, PassController, ProcessState, SourceFile};
@@ -73,9 +74,17 @@ impl<'a> Visitor<'a> {
                 self.current_path.pop();
                 should_retain
             }
+            // We would hope for the unused imports pass to catch all of these
+            // but sadly that's not the case
+            Item::Use(ItemUse { tree, .. }) => {
+                self.current_path.push(tree.to_token_stream().to_string());
+
+                let should_retain = self.should_retain_item();
+
+                self.current_path.pop();
+                should_retain
+            }
             Item::ForeignMod(_) => true,
-            // We hope for the unused imports to show them all.
-            Item::Use(_) => true,
             Item::Verbatim(_) => true,
             _ => true,
         }
