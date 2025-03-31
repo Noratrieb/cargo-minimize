@@ -75,9 +75,17 @@ impl Minimizer {
                 .copied()
                 .cloned()
                 .collect::<Vec<_>>();
+            if desired_suggestions.is_empty() {
+                continue;
+            }
 
             let result =
                 rustfix::apply_suggestions(change.before_content().0, &desired_suggestions)?;
+            anyhow::ensure!(
+                result != change.before_content().0,
+                "Suggestions 'applied' but no changes made??"
+            );
+
             let result = syn::parse_file(&result).context("parsing file after rustfix")?;
             change.write(result)?;
 
