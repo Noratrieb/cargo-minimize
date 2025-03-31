@@ -19,7 +19,7 @@ pub(crate) trait Pass {
 
     /// Process a file. The state of the processor might get invalidated in the process as signaled with
     /// `ProcessState::FileInvalidated`. When a file is invalidated, the minimizer will call `Processor::refersh_state`
-    /// before calling the this function on the same file again.
+    /// before calling this function on the same file again.
     fn process_file(
         &mut self,
         krate: &mut syn::File,
@@ -203,13 +203,13 @@ impl Minimizer {
                     if after.reproduces_issue() {
                         change.commit();
                         checker.reproduces();
+                        if has_made_change == ProcessState::FileInvalidated {
+                            invalidated_files.insert(file);
+                            break;
+                        }
                     } else {
                         change.rollback()?;
                         checker.does_not_reproduce();
-                    }
-
-                    if has_made_change == ProcessState::FileInvalidated {
-                        invalidated_files.insert(file);
                     }
                 }
                 ProcessState::NoChange => {

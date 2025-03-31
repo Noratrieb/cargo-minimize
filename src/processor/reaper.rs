@@ -7,11 +7,7 @@ use anyhow::{Context, Result};
 use proc_macro2::Span;
 use quote::ToTokens;
 use rustfix::{diagnostics::Diagnostic, Suggestion};
-use std::{
-    collections::{HashMap, HashSet},
-    ops::Range,
-    path::{Path, PathBuf},
-};
+use std::{collections::HashMap, ops::Range, path::Path};
 use syn::{visit_mut::VisitMut, ImplItem, Item};
 
 fn file_for_suggestion(suggestion: &Suggestion) -> &Path {
@@ -103,16 +99,11 @@ impl Minimizer {
 struct DeleteUnusedFunctions {
     diags: Vec<Diagnostic>,
     build: Build,
-    invalid: HashSet<PathBuf>,
 }
 
 impl DeleteUnusedFunctions {
     fn new(build: Build, diags: Vec<Diagnostic>) -> Self {
-        DeleteUnusedFunctions {
-            diags,
-            build,
-            invalid: HashSet::new(),
-        }
+        DeleteUnusedFunctions { diags, build }
     }
 }
 
@@ -120,7 +111,6 @@ impl Pass for DeleteUnusedFunctions {
     fn refresh_state(&mut self) -> Result<()> {
         let (diags, _) = self.build.get_diags().context("getting diagnostics")?;
         self.diags = diags;
-        self.invalid.clear();
         Ok(())
     }
 
@@ -130,17 +120,8 @@ impl Pass for DeleteUnusedFunctions {
         file: &SourceFile,
         checker: &mut super::PassController,
     ) -> ProcessState {
-        assert!(
-            !self.invalid.contains(file.path_no_fs_interact()),
-            "processing with invalid state"
-        );
-
         let mut visitor = FindUnusedFunction::new(file, self.diags.iter(), checker);
         visitor.visit_file_mut(krate);
-
-        if visitor.process_state == ProcessState::FileInvalidated {
-            self.invalid.insert(file.path_no_fs_interact().to_owned());
-        }
 
         visitor.process_state
     }
@@ -235,8 +216,12 @@ impl<'a> FindUnusedFunction<'a> {
         match span_matches {
             0 => true,
             1 => {
-                self.process_state = ProcessState::FileInvalidated;
-                !self.checker.can_process(&self.current_path)
+                if self.checker.can_process(&self.current_path) {
+                    self.process_state = ProcessState::FileInvalidated;
+                    !self.checker.can_process(&self.current_path)
+                } else {
+                    true
+                }
             }
             _ => {
                 panic!("multiple dead_code spans matched identifier: {span_matches}.");
