@@ -50,6 +50,31 @@ pub(crate) enum ProcessState {
     FileInvalidated,
 }
 
+#[derive(Debug, Clone)]
+pub enum PassSelection {
+    Enable(Vec<String>),
+    Disable(Vec<String>),
+}
+impl std::str::FromStr for PassSelection {
+    type Err = &'static str;
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        let values = s.split(',').collect::<Vec<_>>();
+        let have_negative = values.iter().any(|v| v.starts_with("no-"));
+        if have_negative && !values.iter().all(|v| v.starts_with("no-")) {
+            return Err("Pass exclusion is supported, by mixing positive pass selection with negative is not allowed (because it's pointless and confusing)");
+        }
+        let actual_values = values
+            .into_iter()
+            .map(|v| v.strip_prefix("no-").unwrap_or(v).to_string())
+            .collect();
+        if !have_negative {
+            Ok(PassSelection::Enable(actual_values))
+        } else {
+            Ok(PassSelection::Disable(actual_values))
+        }
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct Minimizer {
     files: Vec<SourceFile>,
@@ -59,13 +84,12 @@ pub(crate) struct Minimizer {
 }
 
 impl Minimizer {
-    fn pass_disabled(&self, name: &str) -> bool {
-        if let Some(passes) = &self.options.passes {
-            if !passes.split(",").any(|allowed| name == allowed) {
-                return true;
-            }
+    fn pass_enabled(&self, name: &str) -> bool {
+        match &self.options.passes {
+            None => true,
+            Some(PassSelection::Enable(v)) => v.iter().any(|allowed| name == allowed),
+            Some(PassSelection::Disable(v)) => v.iter().all(|forbidden| name != forbidden),
         }
-        false
     }
 
     pub(crate) fn new_glob_dir(
@@ -131,7 +155,7 @@ impl Minimizer {
         inital_build.require_reproduction("Initial")?;
 
         for mut pass in passes {
-            if self.pass_disabled(pass.name()) {
+            if !self.pass_enabled(pass.name()) {
                 continue;
             }
             self.run_pass(&mut *pass)?;
