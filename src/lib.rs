@@ -105,6 +105,10 @@ pub struct Options {
 
     #[arg(skip)]
     pub no_delete_functions: bool,
+
+    /// Remove individual use statements manually, instead of relying on rustc lints output
+    #[arg(long)]
+    pub bisect_delete_imports: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -187,6 +191,7 @@ impl Default for Options {
             script_path_lints: None,
             ignore_file: Vec::new(),
             no_delete_functions: false,
+            bisect_delete_imports: false,
         }
     }
 }

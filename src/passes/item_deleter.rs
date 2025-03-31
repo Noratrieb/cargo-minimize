@@ -76,7 +76,7 @@ impl<'a> Visitor<'a> {
             }
             // We would hope for the unused imports pass to catch all of these
             // but sadly that's not the case
-            Item::Use(ItemUse { tree, .. }) => {
+            Item::Use(ItemUse { tree, .. }) if self.checker.options.bisect_delete_imports => {
                 self.current_path.push(tree.to_token_stream().to_string());
 
                 let should_retain = self.should_retain_item();
