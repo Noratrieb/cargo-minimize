@@ -18,7 +18,7 @@ const PASS_NAME: &str = "delete-unused-functions";
 
 impl Minimizer {
     pub fn delete_dead_code(&mut self) -> Result<()> {
-        if self.pass_disabled(PASS_NAME) {
+        if !self.pass_enabled(PASS_NAME) {
             return Ok(());
         }
 

@@ -20,7 +20,7 @@ mod expand;
 
 use anyhow::{Context, Result};
 use dylib_flag::RustFunction;
-use processor::Minimizer;
+use processor::{Minimizer, PassSelection};
 use tracing::Level;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
 
@@ -83,7 +83,7 @@ pub struct Options {
 
     /// A comma-seperated list of passes that should be enabled. By default, all passes are enabled.
     #[arg(long)]
-    pub passes: Option<String>,
+    pub passes: Option<PassSelection>,
 
     /// A path to a script that is run to check whether code reproduces. When it exits with code 0, the
     /// problem reproduces. If `--script-path-lints` isn't set, this script is also run to get lints.
