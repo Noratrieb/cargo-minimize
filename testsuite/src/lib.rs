@@ -170,6 +170,7 @@ fn build(cargo: &Path, path: &Path, regression_checker_path: &Path) -> Result<()
         flag.push(regression_checker_path);
         flag
     });
+    cmd.arg("--bisect-delete-imports");
 
     let minimize_roots = start_roots.join(",");
 
