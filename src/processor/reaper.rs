@@ -2,13 +2,13 @@
 
 use crate::build::Build;
 
-use super::{files::Changes, tracking, Minimizer, Pass, PassController, ProcessState, SourceFile};
+use super::{Minimizer, Pass, PassController, ProcessState, SourceFile, files::Changes, tracking};
 use anyhow::{Context, Result};
 use proc_macro2::Span;
 use quote::ToTokens;
-use rustfix::{diagnostics::Diagnostic, Suggestion};
+use rustfix::{Suggestion, diagnostics::Diagnostic};
 use std::{collections::HashMap, ops::Range, path::Path};
-use syn::{visit_mut::VisitMut, ImplItem, Item};
+use syn::{ImplItem, Item, visit_mut::VisitMut};
 
 fn file_for_suggestion(suggestion: &Suggestion) -> &Path {
     Path::new(&suggestion.solutions[0].replacements[0].snippet.file_name)

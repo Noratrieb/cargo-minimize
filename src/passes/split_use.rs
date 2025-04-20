@@ -1,9 +1,9 @@
 use std::ops::DerefMut;
 
-use crate::processor::{tracking, Pass, PassController, ProcessState, SourceFile};
+use crate::processor::{Pass, PassController, ProcessState, SourceFile, tracking};
 use quote::ToTokens;
 
-use syn::{visit_mut::VisitMut, Item, ItemUse, UseName, UsePath, UseRename, UseTree};
+use syn::{Item, ItemUse, UseName, UsePath, UseRename, UseTree, visit_mut::VisitMut};
 
 struct Visitor<'a> {
     process_state: ProcessState,

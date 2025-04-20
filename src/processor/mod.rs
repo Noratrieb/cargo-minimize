@@ -3,11 +3,11 @@ mod files;
 mod reaper;
 
 pub(crate) use self::files::SourceFile;
-use crate::{build::Build, processor::files::Changes, Options};
-use anyhow::{bail, Context, Result};
+use crate::{Options, build::Build, processor::files::Changes};
+use anyhow::{Context, Result, bail};
 use owo_colors::OwoColorize;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::{collections::HashSet, ffi::OsStr, fmt::Debug, sync::atomic::AtomicBool};
 
 pub(crate) use self::checker::PassController;
@@ -61,7 +61,9 @@ impl std::str::FromStr for PassSelection {
         let values = s.split(',').collect::<Vec<_>>();
         let have_negative = values.iter().any(|v| v.starts_with("no-"));
         if have_negative && !values.iter().all(|v| v.starts_with("no-")) {
-            return Err("Pass exclusion is supported, by mixing positive pass selection with negative is not allowed (because it's pointless and confusing)");
+            return Err(
+                "Pass exclusion is supported, by mixing positive pass selection with negative is not allowed (because it's pointless and confusing)",
+            );
         }
         let actual_values = values
             .into_iter()

@@ -1,4 +1,4 @@
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{Context, Result, bail, ensure};
 use rustfix::diagnostics::Diagnostic;
 use serde::Deserialize;
 use std::{
@@ -10,7 +10,7 @@ use std::{
     rc::Rc,
 };
 
-use crate::{dylib_flag::RustFunction, EnvVar, Options};
+use crate::{EnvVar, Options, dylib_flag::RustFunction};
 
 #[derive(Debug, Clone)]
 pub struct Build {

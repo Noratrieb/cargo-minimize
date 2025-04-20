@@ -1,7 +1,7 @@
 use quote::ToTokens;
 use syn::{parse_quote, visit_mut::VisitMut};
 
-use crate::processor::{tracking, Pass, PassController, ProcessState, SourceFile};
+use crate::processor::{Pass, PassController, ProcessState, SourceFile, tracking};
 
 struct Visitor<'a> {
     current_path: Vec<String>,
@@ -25,9 +25,11 @@ impl<'a> Visitor<'a> {
 impl VisitMut for Visitor<'_> {
     fn visit_block_mut(&mut self, block: &mut syn::Block) {
         match block.stmts.as_slice() {
-            [syn::Stmt::Expr(syn::Expr::Loop(syn::ExprLoop {
-                body: loop_body, ..
-            }))] if loop_body.stmts.is_empty() => {}
+            [
+                syn::Stmt::Expr(syn::Expr::Loop(syn::ExprLoop {
+                    body: loop_body, ..
+                })),
+            ] if loop_body.stmts.is_empty() => {}
             // Empty bodies are empty already, no need to loopify them.
             [] => {}
             _ if self.checker.can_process(&self.current_path) => {

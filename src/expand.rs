@@ -1,18 +1,18 @@
 // this code is pretty neat i guess but i dont have a use for it right now
 #![allow(dead_code)]
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use cargo::{
     core::{
+        Workspace,
         compiler::{BuildContext, Unit, UnitInterner},
         manifest::TargetSourcePath,
-        Workspace,
     },
     ops::{self, CompileOptions},
-    util::{command_prelude::CompileMode, Config},
+    util::{Config, command_prelude::CompileMode},
 };
 use std::{collections::BTreeSet, fmt::Debug, ops::Not, path::Path, process::Command};
-use syn::{visit_mut::VisitMut, File, Item, ItemExternCrate, ItemMod, ItemUse, Visibility};
+use syn::{File, Item, ItemExternCrate, ItemMod, ItemUse, Visibility, visit_mut::VisitMut};
 
 fn cargo_expand(cargo_dir: &TargetSourcePath) -> Result<syn::File> {
     let cargo_dir = cargo_dir

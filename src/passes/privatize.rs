@@ -1,7 +1,7 @@
 use quote::ToTokens;
-use syn::{parse_quote, visit_mut::VisitMut, Visibility};
+use syn::{Visibility, parse_quote, visit_mut::VisitMut};
 
-use crate::processor::{tracking, Pass, PassController, ProcessState, SourceFile};
+use crate::processor::{Pass, PassController, ProcessState, SourceFile, tracking};
 
 struct Visitor<'a> {
     pub_crate: Visibility,

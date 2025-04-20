@@ -134,7 +134,9 @@ impl PassController {
     pub fn does_not_reproduce(&mut self) {
         match &mut self.state {
             PassControllerState::InitialCollection { candidates: _ } => {
-                unreachable!("we should have made no changes on initial collection, what do you mean it does not reproduce?!?")
+                unreachable!(
+                    "we should have made no changes on initial collection, what do you mean it does not reproduce?!?"
+                )
             }
             PassControllerState::Bisecting {
                 committed,
@@ -194,7 +196,9 @@ impl PassController {
                 }
             }
             PassControllerState::Bisecting { current, .. } => {
-                unreachable!("Pass said it didn't change anything in the bisection phase, nora forgot what this means: {current:?}");
+                unreachable!(
+                    "Pass said it didn't change anything in the bisection phase, nora forgot what this means: {current:?}"
+                );
             }
             PassControllerState::Success { .. } => {}
         }
@@ -247,11 +251,7 @@ impl PassController {
 pub const fn div_ceil(lhs: usize, rhs: usize) -> usize {
     let d = lhs / rhs;
     let r = lhs % rhs;
-    if r > 0 && rhs > 0 {
-        d + 1
-    } else {
-        d
-    }
+    if r > 0 && rhs > 0 { d + 1 } else { d }
 }
 
 /// Splits an owned container in half.

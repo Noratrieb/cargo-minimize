@@ -2,13 +2,13 @@
 extern crate tracing;
 
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
     Arc,
+    atomic::{AtomicBool, Ordering},
 };
 
 use anyhow::Result;
 use cargo_minimize::{Cargo, Parser};
-use tracing::{error, Level};
+use tracing::{Level, error};
 
 fn main() -> Result<()> {
     let Cargo::Minimize(options) = Cargo::parse();

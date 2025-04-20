@@ -4,7 +4,7 @@ extern crate tracing;
 use std::{
     path::PathBuf,
     str::FromStr,
-    sync::{atomic::AtomicBool, Arc},
+    sync::{Arc, atomic::AtomicBool},
 };
 
 mod build;
@@ -23,7 +23,7 @@ use anyhow::{Context, Result};
 use dylib_flag::RustFunction;
 use processor::{Minimizer, PassSelection};
 use tracing::Level;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
+use tracing_subscriber::{EnvFilter, Registry, layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::processor::Pass;
 
