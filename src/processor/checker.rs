@@ -194,7 +194,7 @@ impl PassController {
                 }
             }
             PassControllerState::Bisecting { current, .. } => {
-                unreachable!("Pass said it didn't change anything in the bisection phase, nils forgot what this means: {current:?}");
+                unreachable!("Pass said it didn't change anything in the bisection phase, nora forgot what this means: {current:?}");
             }
             PassControllerState::Success { .. } => {}
         }
