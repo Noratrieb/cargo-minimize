@@ -37,12 +37,18 @@ Options:
           Additional environment variables to pass to cargo/rustc. Example: `--env NAME=VALUE --env ANOTHER_NAME=VALUE`
       --project-dir <PROJECT_DIR>
           The working directory where cargo/rustc are invoked in. By default, this is the current working directory
+      --passes <PASSES>
+          A comma-seperated list of passes that should be enabled. By default, all passes are enabled. If a pass is prefixed with `no-`, it will be disabled
       --script-path <SCRIPT_PATH>
           A path to a script that is run to check whether code reproduces. When it exits with code 0, the problem reproduces. If `--script-path-lints` isn't set, this script is also run to get lints. For lints, the `MINIMIZE_LINTS` environment variable will be set to `1`. The first line of the lint stdout or stderr can be `minimize-fmt-rustc` or `minimize-fmt-cargo` to show whether the rustc or wrapper cargo lint format and which output stream is used. Defaults to cargo and stdout
       --script-path-lints <SCRIPT_PATH_LINTS>
           A path to a script that is run to get lints. The first line of stdout or stderr must be `minimize-fmt-rustc` or `minimize-fmt-cargo` to show whether the rustc or wrapper cargo lint format and which output stream is used. Defaults to cargo and stdout
+      --ignore-file <IGNORE_FILE>
+          Do not touch the following files
+      --bisect-delete-imports
+          Remove individual use statements manually, instead of relying on rustc lints output
   -h, --help
-          Print help information
+          Print help
 ```
 
 Note: You can safely press `Ctrl-C` when running cargo-minimize. It will rollback the current minimization attempt and give you the latest known-reproducing state.

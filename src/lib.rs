@@ -83,6 +83,7 @@ pub struct Options {
     pub path: PathBuf,
 
     /// A comma-seperated list of passes that should be enabled. By default, all passes are enabled.
+    /// If a pass is prefixed with `no-`, it will be disabled.
     #[arg(long)]
     pub passes: Option<PassSelection>,
 
