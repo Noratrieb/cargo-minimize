@@ -5,7 +5,7 @@ exclude = ["test-cases/*", "full-tests/*"]
 [package]
 name = "cargo-minimize"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 categories = ["development-tools"]
 description = "A tool for minimizing rustc ICEs"
 keywords = ["minimization", "ICE", "rust-development"]

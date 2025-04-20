@@ -15,7 +15,8 @@ mod processor;
 
 pub use build::rustup_which;
 
-#[cfg(this_pulls_in_cargo_which_is_a_big_dep_i_dont_like_it)]
+// this experimental and doesnt really work
+#[cfg(any())]
 mod expand;
 
 use anyhow::{Context, Result};
