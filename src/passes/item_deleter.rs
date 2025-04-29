@@ -1,8 +1,7 @@
 use quote::ToTokens;
 use syn::{
-    Item, ItemConst, ItemEnum, ItemExternCrate, ItemFn, ItemMacro, ItemMacro2, ItemMod, ItemStatic,
-    ItemStruct, ItemTrait, ItemTraitAlias, ItemType, ItemUnion, ItemUse, Signature,
-    visit_mut::VisitMut,
+    Item, ItemConst, ItemEnum, ItemExternCrate, ItemFn, ItemMacro, ItemMod, ItemStatic, ItemStruct,
+    ItemTrait, ItemTraitAlias, ItemType, ItemUnion, ItemUse, Signature, visit_mut::VisitMut,
 };
 
 use crate::processor::{Pass, PassController, ProcessState, SourceFile, tracking};
@@ -63,7 +62,6 @@ impl<'a> Visitor<'a> {
             | Item::Macro(ItemMacro {
                 ident: Some(ident), ..
             })
-            | Item::Macro2(ItemMacro2 { ident, .. })
             | Item::Static(ItemStatic { ident, .. })
             | Item::Mod(ItemMod { ident, .. })
             | Item::ExternCrate(ItemExternCrate { ident, .. }) => {
@@ -111,7 +109,7 @@ impl VisitMut for Visitor<'_> {
     }
 
     tracking!(visit_item_fn_mut);
-    tracking!(visit_impl_item_method_mut);
+    tracking!(visit_impl_item_fn_mut);
     tracking!(visit_item_impl_mut);
     tracking!(visit_field_mut);
     tracking!(visit_item_struct_mut);

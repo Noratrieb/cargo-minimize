@@ -244,7 +244,7 @@ impl VisitMut for FindUnusedFunction<'_> {
             .push(item_impl.self_ty.clone().into_token_stream().to_string());
 
         item_impl.items.retain(|item| match item {
-            ImplItem::Method(method) => {
+            ImplItem::Fn(method) => {
                 self.current_path.push(method.sig.ident.to_string());
 
                 let span = method.sig.ident.span();
@@ -303,7 +303,7 @@ impl VisitMut for FindUnusedFunction<'_> {
     }
 
     tracking!(visit_item_fn_mut);
-    tracking!(visit_impl_item_method_mut);
+    tracking!(visit_impl_item_fn_mut);
     tracking!(visit_field_mut);
     tracking!(visit_item_struct_mut);
     tracking!(visit_item_trait_mut);
