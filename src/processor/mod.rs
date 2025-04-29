@@ -268,7 +268,7 @@ impl Minimizer {
 macro_rules! tracking {
     () => {
         tracking!(visit_item_fn_mut);
-        tracking!(visit_impl_item_method_mut);
+        tracking!(visit_impl_item_fn_mut);
         tracking!(visit_item_impl_mut);
         tracking!(visit_item_mod_mut);
         tracking!(visit_field_mut);
@@ -282,10 +282,10 @@ macro_rules! tracking {
             self.current_path.pop();
         }
     };
-    (visit_impl_item_method_mut) => {
-        fn visit_impl_item_method_mut(&mut self, method: &mut syn::ImplItemMethod) {
+    (visit_impl_item_fn_mut) => {
+        fn visit_impl_item_fn_mut(&mut self, method: &mut syn::ImplItemFn) {
             self.current_path.push(method.sig.ident.to_string());
-            syn::visit_mut::visit_impl_item_method_mut(self, method);
+            syn::visit_mut::visit_impl_item_fn_mut(self, method);
             self.current_path.pop();
         }
     };

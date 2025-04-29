@@ -28,7 +28,7 @@ impl VisitMut for Visitor<'_> {
             [
                 syn::Stmt::Expr(syn::Expr::Loop(syn::ExprLoop {
                     body: loop_body, ..
-                })),
+                }), _semi),
             ] if loop_body.stmts.is_empty() => {}
             // Empty bodies are empty already, no need to loopify them.
             [] => {}
